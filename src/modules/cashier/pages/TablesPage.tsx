@@ -2,6 +2,7 @@ import { TakeoutView } from '../components/TakeoutView';
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ProfileModal } from '../components/ProfileModal'; 
+// Se eliminó la importación del Modal de Ocupación
 
 // --- 1. Tipos e Interfaces ---
 type TableStatus = 'available' | 'occupied' | 'reserved';
@@ -18,7 +19,7 @@ interface Table {
   waiterAvatarUrl?: string; 
 }
 
-// --- 2. Datos de Prueba ---
+// --- 2. Datos de Prueba Iniciales ---
 const CURRENT_USER = {
   name: 'Salvador',
   role: 'Cajero Principal',
@@ -28,7 +29,7 @@ const CURRENT_USER = {
 
 const FILTER_CATEGORIES = ['Todas', 'Lobby', 'Nueva Zona', 'Patio', 'Sin zona'];
 
-const MOCK_TABLES: Table[] = [
+const INITIAL_TABLES: Table[] = [
   { id: 1, name: 'Mesa 1', location: 'Lobby', status: 'available', peopleCount: 0 },
   { id: 2, name: 'Mesa 2', location: 'Lobby', status: 'available', peopleCount: 0 },
   { id: 3, name: 'Mesa 3', location: 'Terraza Suprem', status: 'available', peopleCount: 0 },
@@ -40,37 +41,27 @@ const MOCK_TABLES: Table[] = [
 ];
 
 // --- 3. Iconos SVG ---
-const SearchIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-);
-const LogoutIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
-);
-const PeopleIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="#666"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
-);
-const TableIcon = ({ color }: {color: string}) => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3h18v18H3zM9 3v18M15 3v18M3 9h18M3 15h18"/></svg>
-);
-const BagIcon = ({ color }: {color: string}) => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line><path d="M16 10a4 4 0 0 1-8 0"></path></svg>
-);
-// Iconos para el Modal
-const WarningIcon = () => (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#FF9F43" strokeWidth="2"/><path d="M12 8V12" stroke="#FF9F43" strokeWidth="2" strokeLinecap="round"/><circle cx="12" cy="16" r="1" fill="#FF9F43"/></svg>
-);
-const CloseIcon = () => (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-);
-
+const SearchIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>);
+const LogoutIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>);
+const PeopleIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="#666"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>);
+const TableIcon = ({ color }: {color: string}) => (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3h18v18H3zM9 3v18M15 3v18M3 9h18M3 15h18"/></svg>);
+const BagIcon = ({ color }: {color: string}) => (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line><path d="M16 10a4 4 0 0 1-8 0"></path></svg>);
+const WarningIcon = () => (<svg width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#FF9F43" strokeWidth="2"/><path d="M12 8V12" stroke="#FF9F43" strokeWidth="2" strokeLinecap="round"/><circle cx="12" cy="16" r="1" fill="#FF9F43"/></svg>);
+const CloseIcon = () => (<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>);
 
 // --- 4. Componente Principal ---
 export const TablesPage: React.FC = () => {
   const navigate = useNavigate();
-  const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false); // Estado para el modal de cerrar sesión
   
-  // Estados de vista y filtros
+  // Regresamos a usar INITIAL_TABLES como estado base
+  const [tables, setTables] = useState<Table[]>(INITIAL_TABLES);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
+  
+  // Eliminados estados del modal de ocupación
+  // const [isOccupationModalOpen, setIsOccupationModalOpen] = useState(false);
+  // const [selectedTable, setSelectedTable] = useState<Table | null>(null);
+
   const [viewMode, setViewMode] = useState<ViewMode>('tables'); 
   const [activeCategory, setActiveCategory] = useState('Todas');
   const [searchTerm, setSearchTerm] = useState('');
@@ -87,32 +78,32 @@ export const TablesPage: React.FC = () => {
     }
   };
 
-  const filteredTables = MOCK_TABLES.filter(table => {
+  const filteredTables = tables.filter(table => {
     const matchesSearch = table.name.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = activeCategory === 'Todas' || table.location === activeCategory;
     const matchesStatus = statusFilter === 'all' || table.status === statusFilter;
     return matchesSearch && matchesCategory && matchesStatus;
   });
 
-  // Función para manejar el cierre de sesión real
   const handleLogout = () => {
-      // Aquí iría tu lógica (limpiar localStorage, context, etc.)
       console.log("Cerrando sesión...");
       setIsLogoutModalOpen(false);
-      navigate('/login'); // O a donde redirijas al salir
+      navigate('/login');
   };
+
+  // Eliminada lógica de handleTableClick compleja y handleConfirmOccupation
 
   return (
     <div style={styles.pageContainer}>
       
-      {/* --- MODAL DE PERFIL --- */}
       <ProfileModal 
         isOpen={isProfileOpen} 
         onClose={() => setIsProfileOpen(false)} 
         user={CURRENT_USER}
       />
 
-      {/* --- MODAL DE CERRAR SESIÓN (NUEVO) --- */}
+      {/* Eliminado el bloque del TableOccupationModal */}
+
       {isLogoutModalOpen && (
           <div style={styles.modalOverlay}>
               <div style={styles.logoutModalContent}>
@@ -125,39 +116,22 @@ export const TablesPage: React.FC = () => {
                           <CloseIcon />
                       </button>
                   </div>
-                  
                   <div style={styles.logoutModalBody}>
                       <p style={styles.logoutQuestion}>¿Estás seguro que quieres cerrar sesión?</p>
                       <p style={styles.logoutDescription}>
                           Se cerrará tu sesión actual y tendrás que volver a iniciar sesión para acceder al sistema.
                       </p>
                   </div>
-
                   <div style={styles.logoutModalFooter}>
-                      <button 
-                          style={styles.cancelButton} 
-                          onClick={() => setIsLogoutModalOpen(false)}
-                      >
-                          No, cancelar
-                      </button>
-                      <button 
-                          style={styles.confirmButton} 
-                          onClick={handleLogout}
-                      >
-                          Sí, cerrar sesión
-                      </button>
+                      <button style={styles.cancelButton} onClick={() => setIsLogoutModalOpen(false)}>No, cancelar</button>
+                      <button style={styles.confirmButton} onClick={handleLogout}>Sí, cerrar sesión</button>
                   </div>
               </div>
           </div>
       )}
 
-
-      {/* --- Header Superior --- */}
       <header style={styles.header}>
-        <div 
-            style={{...styles.userInfo, cursor: 'pointer'}} 
-            onClick={() => setIsProfileOpen(true)}
-        >
+        <div style={{...styles.userInfo, cursor: 'pointer'}} onClick={() => setIsProfileOpen(true)}>
           <img src={CURRENT_USER.avatarUrl} alt="User Avatar" style={styles.mainAvatar} />
           <div>
             <h2 style={styles.userName}>{CURRENT_USER.name}</h2>
@@ -168,48 +142,29 @@ export const TablesPage: React.FC = () => {
         <div style={styles.headerActions}>
           <div style={styles.modeSwitchContainer}>
             <div 
-                style={{
-                    ...styles.switchOption, 
-                    backgroundColor: viewMode === 'tables' ? '#fff' : 'transparent',
-                    boxShadow: viewMode === 'tables' ? '0 2px 5px rgba(0,0,0,0.1)' : 'none'
-                }}
+                style={{...styles.switchOption, backgroundColor: viewMode === 'tables' ? '#fff' : 'transparent', boxShadow: viewMode === 'tables' ? '0 2px 5px rgba(0,0,0,0.1)' : 'none'}}
                 onClick={() => setViewMode('tables')}
             >
                 <TableIcon color={viewMode === 'tables' ? '#FF9F43' : '#999'} />
                 <span style={{...styles.switchText, color: viewMode === 'tables' ? '#333' : '#999'}}>Mesas</span>
             </div>
-            
             <div 
-                style={{
-                    ...styles.switchOption, 
-                    backgroundColor: viewMode === 'takeout' ? '#fff' : 'transparent',
-                    boxShadow: viewMode === 'takeout' ? '0 2px 5px rgba(0,0,0,0.1)' : 'none'
-                }}
+                style={{...styles.switchOption, backgroundColor: viewMode === 'takeout' ? '#fff' : 'transparent', boxShadow: viewMode === 'takeout' ? '0 2px 5px rgba(0,0,0,0.1)' : 'none'}}
                 onClick={() => setViewMode('takeout')}
             >
                  <BagIcon color={viewMode === 'takeout' ? '#FF9F43' : '#999'} />
                  <span style={{...styles.switchText, color: viewMode === 'takeout' ? '#333' : '#999'}}>Llevar</span>
             </div>
           </div>
-
-          {/* BOTÓN DE LOGOUT ACTUALIZADO */}
-          <button 
-            style={styles.iconButton} 
-            title="Cerrar Sesión"
-            onClick={() => setIsLogoutModalOpen(true)}
-          >
+          <button style={styles.iconButton} title="Cerrar Sesión" onClick={() => setIsLogoutModalOpen(true)}>
              <LogoutIcon />
           </button>
         </div>
       </header>
 
-
-      {/* --- CONTENIDO DINÁMICO --- */}
       {viewMode === 'tables' ? (
         <>
-            {/* Barra de Control */}
             <div style={styles.controlsContainer}>
-                
                 <div style={styles.leftControlsGroup}>
                     <div style={styles.searchContainer}>
                         <div style={styles.searchIconWrapper}><SearchIcon /></div>
@@ -217,16 +172,11 @@ export const TablesPage: React.FC = () => {
                             type="text" 
                             placeholder="Buscar mesa..." 
                             style={styles.searchInput}
-                            value={searchTerm}
+                            value={searchTerm} 
                             onChange={(e) => setSearchTerm(e.target.value)}
                         />
                     </div>
-                    
-                    <select 
-                        style={styles.statusSelect}
-                        value={statusFilter}
-                        onChange={(e) => setStatusFilter(e.target.value as FilterStatus)}
-                    >
+                    <select style={styles.statusSelect} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as FilterStatus)}>
                         <option value="all">Estado: Todos</option>
                         <option value="available">🟢 Disponibles</option>
                         <option value="occupied">🔴 Ocupadas</option>
@@ -251,7 +201,6 @@ export const TablesPage: React.FC = () => {
                 </div>
             </div>
 
-            {/* Grid de Mesas */}
             <div style={styles.tablesGrid}>
                 {filteredTables.map(table => {
                 const statusStyle = getStatusStyles(table.status);
@@ -261,7 +210,7 @@ export const TablesPage: React.FC = () => {
                 <div 
                     key={table.id} 
                     style={{...styles.tableCard, border: statusStyle.border}}
-                    onClick={() => navigate('/menu')} 
+                    onClick={() => navigate('/menu')} // Restaurada la navegación simple
                 >
                     <div style={styles.cardHeader}>
                     <h3 style={styles.tableName}>{table.name}</h3>
@@ -304,7 +253,6 @@ export const TablesPage: React.FC = () => {
       ) : (
         <TakeoutView />
       )}
-
     </div>
   );
 };
@@ -312,361 +260,84 @@ export const TablesPage: React.FC = () => {
 // --- 5. Estilos ---
 const styles: { [key: string]: React.CSSProperties } = {
   pageContainer: {
-    backgroundColor: '#F8F9FA',
-    minHeight: '100vh',
-    width: '100%',     
-    maxWidth: '100vw', 
-    padding: '40px 60px', 
-    boxSizing: 'border-box',
-    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+    backgroundColor: '#F8F9FA', minHeight: '100vh', width: '100%', maxWidth: '100vw', 
+    padding: '40px 60px', boxSizing: 'border-box', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+  },
+  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '40px', width: '100%' },
+  userInfo: { display: 'flex', alignItems: 'center', transition: 'opacity 0.2s' },
+  mainAvatar: { width: '64px', height: '64px', borderRadius: '50%', marginRight: '20px', border: '3px solid #fff', boxShadow: '0 4px 10px rgba(0,0,0,0.1)', objectFit: 'cover' },
+  userName: { margin: 0, fontSize: '24px', fontWeight: '700', color: '#333' },
+  userRole: { margin: 0, fontSize: '16px', color: '#999' },
+  headerActions: { display: 'flex', alignItems: 'center', gap: '25px' },
+  iconButton: { background: 'none', border: 'none', cursor: 'pointer', padding: '8px', borderRadius: '8px' },
+  modeSwitchContainer: { display: 'flex', backgroundColor: '#E9ECEF', padding: '4px', borderRadius: '12px', gap: '4px' },
+  switchOption: { display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', borderRadius: '10px', cursor: 'pointer', transition: 'all 0.3s ease', userSelect: 'none' },
+  switchText: { fontSize: '14px', fontWeight: '600' },
+  controlsContainer: { display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'space-between', marginBottom: '35px', gap: '20px', flexWrap: 'wrap' },
+  leftControlsGroup: { display: 'flex', alignItems: 'center', gap: '15px', flex: 1, minWidth: '300px' },
+  searchContainer: { flex: 1, position: 'relative', display: 'flex', alignItems: 'center' },
+  searchIconWrapper: { position: 'absolute', left: '20px', display: 'flex', pointerEvents: 'none' },
+  
+  // MANTENIENDO ESTILOS CORREGIDOS
+  searchInput: { 
+      width: '58%', 
+      height: '65px', 
+      padding: '0 20px 0 50px', 
+      borderRadius: '12px', 
+      border: '1px solid #eee', 
+      backgroundColor: '#FFFFFF', 
+      fontSize: '16px', 
+      color: '#333333', 
+      boxShadow: '0 2px 10px rgba(0,0,0,0.02)', 
+      outline: 'none', 
+      boxSizing: 'border-box'
   },
   
-  // --- Estilos del Modal de Logout ---
-  modalOverlay: {
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      width: '100vw',
-      height: '100vh',
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'center',
-      zIndex: 1000, // Asegura que esté por encima de todo
-  },
-  logoutModalContent: {
-      backgroundColor: '#fff',
-      borderRadius: '16px',
-      padding: '30px',
-      width: '500px',
-      maxWidth: '90%',
-      boxShadow: '0 10px 30px rgba(0,0,0,0.1)',
-      display: 'flex',
-      flexDirection: 'column',
-  },
-  logoutModalHeader: {
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: '20px',
-  },
-  logoutTitleContainer: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: '12px',
-  },
-  warningIconWrapper: {
-      width: '40px',
-      height: '40px',
-      borderRadius: '50%',
-      backgroundColor: '#FFF5EB', // Fondo naranja muy claro
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'center',
-  },
-  logoutTitle: {
-      margin: 0,
-      fontSize: '20px',
-      fontWeight: '700',
-      color: '#333',
-  },
-  closeModalButton: {
-      background: 'none',
-      border: 'none',
-      cursor: 'pointer',
-      padding: '5px',
-  },
-  logoutModalBody: {
-      marginBottom: '30px',
-  },
-  logoutQuestion: {
-      fontSize: '18px',
-      fontWeight: '500',
-      color: '#444',
-      marginBottom: '10px',
-  },
-  logoutDescription: {
-      fontSize: '14px',
-      color: '#666',
-      lineHeight: '1.5',
-      margin: 0,
-  },
-  logoutModalFooter: {
-      display: 'flex',
-      justifyContent: 'flex-end',
-      gap: '15px',
-  },
-  cancelButton: {
-      padding: '12px 24px',
-      borderRadius: '8px',
-      border: '1px solid #E0E0E0',
-      backgroundColor: '#fff',
-      color: '#333',
-      fontSize: '15px',
-      fontWeight: '600',
-      cursor: 'pointer',
-      transition: 'background-color 0.2s',
-  },
-  confirmButton: {
-      padding: '12px 24px',
-      borderRadius: '8px',
-      border: 'none',
-      backgroundColor: '#FF9F43',
-      color: '#fff',
-      fontSize: '15px',
-      fontWeight: '600',
-      cursor: 'pointer',
-      boxShadow: '0 4px 10px rgba(255, 159, 67, 0.2)',
-  },
-
-
-  // Header General
-  header: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: '40px',
-    width: '100%',
-  },
-  userInfo: {
-    display: 'flex',
-    alignItems: 'center',
-    transition: 'opacity 0.2s',
-  },
-  mainAvatar: {
-    width: '64px', 
-    height: '64px',
-    borderRadius: '50%',
-    marginRight: '20px',
-    border: '3px solid #fff',
-    boxShadow: '0 4px 10px rgba(0,0,0,0.1)',
-    objectFit: 'cover'
-  },
-  userName: {
-    margin: 0,
-    fontSize: '24px', 
-    fontWeight: '700',
-    color: '#333',
-  },
-  userRole: {
-    margin: 0,
-    fontSize: '16px',
-    color: '#999',
-  },
-  headerActions: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: '25px' 
-  },
-  iconButton: {
-      background: 'none',
-      border: 'none',
-      cursor: 'pointer',
-      padding: '8px',
-      borderRadius: '8px',
-  },
-
-  // Switch Mesas/Llevar
-  modeSwitchContainer: {
-      display: 'flex',
-      backgroundColor: '#E9ECEF',
-      padding: '4px',
-      borderRadius: '12px',
-      gap: '4px'
-  },
-  switchOption: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: '8px',
-      padding: '8px 16px',
-      borderRadius: '10px',
-      cursor: 'pointer',
-      transition: 'all 0.3s ease',
-      userSelect: 'none'
-  },
-  switchText: {
-      fontSize: '14px',
-      fontWeight: '600',
-  },
-  
-  // Controles
-  controlsContainer: {
-    display: 'flex',
-    width: '100%', 
-    alignItems: 'center',
-    justifyContent: 'space-between', 
-    marginBottom: '35px',
-    gap: '20px',
-    flexWrap: 'wrap'
-  },
-  leftControlsGroup: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: '15px',
-      flex: 1, 
-      minWidth: '300px'
-  },
-  searchContainer: {
-    flex: 1, 
-    position: 'relative',
-    display: 'flex',
-    alignItems: 'center',
-    
-  },
-  searchIconWrapper: {
-      position: 'absolute',
-      left: '20px',
-      display: 'flex',
-      pointerEvents: 'none'
-  },
-  searchInput: {
-    width: '65%', 
-    padding: '16px 20px 16px 50px',
-    borderRadius: '12px',
-    border: '1px solid #eee',
-    backgroundColor: '#FFFFFF',
-    color:'black',
-    fontSize: '16px',
-    boxShadow: '0 2px 10px rgba(0,0,0,0.02)',
-    outline: 'none',
-    boxSizing: 'border-box', 
-    
-  },
-  statusSelect: {
-      padding: '16px 20px',
-      borderRadius: '12px',
-      border: '1px solid #eee',
-      backgroundColor: '#FFFFFF',
-      fontSize: '15px',
-      fontWeight: '500',
-      color: '#444',
-      cursor: 'pointer',
-      outline: 'none',
-      boxShadow: '0 2px 10px rgba(0,0,0,0.02)',
+  statusSelect: { 
+      padding: '0 20px', 
+      height: '65px', 
+      borderRadius: '12px', 
+      border: '1px solid #eee', 
+      backgroundColor: '#FFFFFF', 
+      fontSize: '15px', 
+      fontWeight: '500', 
+      color: '#444', 
+      cursor: 'pointer', 
+      outline: 'none', 
+      boxShadow: '0 2px 10px rgba(0,0,0,0.02)', 
       minWidth: '160px',
-      fontFamily:'-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+      fontFamily: 'inherit' 
   },
-
-  // Filtros de Zona
-  categoriesContainer: {
-    display: 'flex',
-    gap: '10px',
-    flexWrap: 'wrap',
-  },
-  categoryPill: {
-    padding: '10px 20px', 
-    borderRadius: '25px',
-    fontSize: '14px',
-    fontWeight: '600',
-    cursor: 'pointer',
-    whiteSpace: 'nowrap',
-    boxShadow: '0 2px 5px rgba(0,0,0,0.02)',
-    transition: 'all 0.2s',
-  },
-
-  // Grid
-  tablesGrid: {
-    display: 'grid',
-    width: '100%',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', 
-    gap: '30px',
-  },
-  noResults: {
-      width: '100%',
-      gridColumn: '1 / -1',
-      textAlign: 'center',
-      padding: '40px',
-      color: '#999',
-      fontSize: '18px'
-  },
-
-  // Tarjeta de Mesa
-  tableCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: '24px', 
-    padding: '30px', 
-    boxShadow: '0 8px 20px rgba(0,0,0,0.04)',
-    display: 'flex',
-    flexDirection: 'column',
-    cursor: 'pointer',
-    transition: 'transform 0.2s, box-shadow 0.2s',
-  },
-  cardHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: '8px',
-  },
-  tableName: {
-    margin: 0,
-    fontSize: '24px',
-    fontWeight: '800',
-    color: '#333',
-  },
-  statusBadge: {
-    padding: '8px 16px',
-    borderRadius: '12px',
-    fontSize: '12px',
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: '0.5px',
-  },
-  tableLocation: {
-    margin: '0 0 25px 0',
-    fontSize: '16px',
-    color: '#999',
-    fontWeight: '500',
-  },
-  peopleCountPill: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    backgroundColor: '#F5F6FA',
-    padding: '10px 16px',
-    borderRadius: '12px',
-    marginBottom: '35px',
-    alignSelf: 'flex-start',
-  },
-  peopleCountText: {
-    marginLeft: '10px',
-    fontSize: '16px',
-    fontWeight: '600',
-    color: '#666',
-  },
-  cardFooter: {
-    marginTop: 'auto',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderTop: '1px solid #f0f0f0', 
-    paddingTop: '20px',
-    minHeight: '40px' 
-  },
-  waiterLabel: {
-    fontSize: '15px',
-    color: '#aaa',
-    fontWeight: '500',
-  },
-  waiterLabelEmpty: {
-    fontSize: '14px',
-    color: '#ccc',
-    fontStyle: 'italic',
-  },
-  waiterInfo: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: '10px'
-  },
-  waiterNameText: {
-      fontSize: '15px',
-      color: '#333',
-      fontWeight: '600'
-  },
-  smallAvatar: {
-    width: '40px',
-    height: '40px',
-    borderRadius: '50%',
-    border: '2px solid #fff',
-    boxShadow: '0 0 0 2px #fff, 0 0 0 4px #1E8E3E', 
-    objectFit: 'cover'
-  },
+  
+  categoriesContainer: { display: 'flex', gap: '10px', flexWrap: 'wrap' },
+  categoryPill: { padding: '10px 20px', borderRadius: '25px', fontSize: '14px', fontWeight: '600', cursor: 'pointer', whiteSpace: 'nowrap', boxShadow: '0 2px 5px rgba(0,0,0,0.02)', transition: 'all 0.2s' },
+  tablesGrid: { display: 'grid', width: '100%', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '30px' },
+  noResults: { width: '100%', gridColumn: '1 / -1', textAlign: 'center', padding: '40px', color: '#999', fontSize: '18px' },
+  tableCard: { backgroundColor: '#FFFFFF', borderRadius: '24px', padding: '30px', boxShadow: '0 8px 20px rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column', cursor: 'pointer', transition: 'transform 0.2s, box-shadow 0.2s' },
+  cardHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' },
+  tableName: { margin: 0, fontSize: '24px', fontWeight: '800', color: '#333' },
+  statusBadge: { padding: '8px 16px', borderRadius: '12px', fontSize: '12px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' },
+  tableLocation: { margin: '0 0 25px 0', fontSize: '16px', color: '#999', fontWeight: '500' },
+  peopleCountPill: { display: 'inline-flex', alignItems: 'center', backgroundColor: '#F5F6FA', padding: '10px 16px', borderRadius: '12px', marginBottom: '35px', alignSelf: 'flex-start' },
+  peopleCountText: { marginLeft: '10px', fontSize: '16px', fontWeight: '600', color: '#666' },
+  cardFooter: { marginTop: 'auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #f0f0f0', paddingTop: '20px', minHeight: '40px' },
+  waiterLabel: { fontSize: '15px', color: '#aaa', fontWeight: '500' },
+  waiterLabelEmpty: { fontSize: '14px', color: '#ccc', fontStyle: 'italic' },
+  waiterInfo: { display: 'flex', alignItems: 'center', gap: '10px' },
+  waiterNameText: { fontSize: '15px', color: '#333', fontWeight: '600' },
+  smallAvatar: { width: '40px', height: '40px', borderRadius: '50%', border: '2px solid #fff', boxShadow: '0 0 0 2px #fff, 0 0 0 4px #1E8E3E', objectFit: 'cover' },
+  
+  modalOverlay: { position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 },
+  logoutModalContent: { backgroundColor: '#fff', borderRadius: '16px', padding: '30px', width: '500px', maxWidth: '90%', boxShadow: '0 10px 30px rgba(0,0,0,0.1)', display: 'flex', flexDirection: 'column' },
+  logoutModalHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' },
+  logoutTitleContainer: { display: 'flex', alignItems: 'center', gap: '12px' },
+  warningIconWrapper: { width: '40px', height: '40px', borderRadius: '50%', backgroundColor: '#FFF5EB', display: 'flex', justifyContent: 'center', alignItems: 'center' },
+  logoutTitle: { margin: 0, fontSize: '20px', fontWeight: '700', color: '#333' },
+  closeModalButton: { background: 'none', border: 'none', cursor: 'pointer', padding: '5px' },
+  logoutModalBody: { marginBottom: '30px' },
+  logoutQuestion: { fontSize: '18px', fontWeight: '500', color: '#444', marginBottom: '10px' },
+  logoutDescription: { fontSize: '14px', color: '#666', lineHeight: '1.5', margin: 0 },
+  logoutModalFooter: { display: 'flex', justifyContent: 'flex-end', gap: '15px' },
+  cancelButton: { padding: '12px 24px', borderRadius: '8px', border: '1px solid #E0E0E0', backgroundColor: '#fff', color: '#333', fontSize: '15px', fontWeight: '600', cursor: 'pointer', transition: 'background-color 0.2s' },
+  confirmButton: { padding: '12px 24px', borderRadius: '8px', border: 'none', backgroundColor: '#FF9F43', color: '#fff', fontSize: '15px', fontWeight: '600', cursor: 'pointer', boxShadow: '0 4px 10px rgba(255, 159, 67, 0.2)' },
 };
