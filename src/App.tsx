@@ -1,35 +1,18 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import React from 'react';
+import { AppRouter } from './router/AppRouter';
+// 1. IMPORTAMOS EL PROVIDER
+// Asegúrate que esta ruta coincida con donde guardaste el archivo OrdersContext.tsx
+import { OrdersProvider } from './modules/cashier/context/OrdersContext'; 
 
-function App() {
-  const [count, setCount] = useState(0)
+import './index.css'; // Tus estilos globales
 
+const App: React.FC = () => {
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
-}
+    // 2. ENVOLVEMOS EL ROUTER CON EL PROVEEDOR
+    <OrdersProvider>
+      <AppRouter />
+    </OrdersProvider>
+  );
+};
 
-export default App
+export default App;
