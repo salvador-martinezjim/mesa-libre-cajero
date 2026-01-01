@@ -2,7 +2,8 @@ import { TakeoutView } from '../components/TakeoutView';
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ProfileModal } from '../components/ProfileModal'; 
-// Se eliminó la importación del Modal de Ocupación
+// 1. Importación del Modal de Notificaciones
+import { NotificationsModal } from '../components/NotificationsModal';
 
 // --- 1. Tipos e Interfaces ---
 type TableStatus = 'available' | 'occupied' | 'reserved';
@@ -48,19 +49,19 @@ const TableIcon = ({ color }: {color: string}) => (<svg width="18" height="18" v
 const BagIcon = ({ color }: {color: string}) => (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line><path d="M16 10a4 4 0 0 1-8 0"></path></svg>);
 const WarningIcon = () => (<svg width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#FF9F43" strokeWidth="2"/><path d="M12 8V12" stroke="#FF9F43" strokeWidth="2" strokeLinecap="round"/><circle cx="12" cy="16" r="1" fill="#FF9F43"/></svg>);
 const CloseIcon = () => (<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>);
+// Nuevo Icono de Campana para el Header
+const BellIconHeader = () => (<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>);
 
 // --- 4. Componente Principal ---
 export const TablesPage: React.FC = () => {
   const navigate = useNavigate();
   
-  // Regresamos a usar INITIAL_TABLES como estado base
   const [tables, setTables] = useState<Table[]>(INITIAL_TABLES);
+  
+  // Estados de Modales
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
-  
-  // Eliminados estados del modal de ocupación
-  // const [isOccupationModalOpen, setIsOccupationModalOpen] = useState(false);
-  // const [selectedTable, setSelectedTable] = useState<Table | null>(null);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false); // NUEVO ESTADO
 
   const [viewMode, setViewMode] = useState<ViewMode>('tables'); 
   const [activeCategory, setActiveCategory] = useState('Todas');
@@ -91,8 +92,6 @@ export const TablesPage: React.FC = () => {
       navigate('/login');
   };
 
-  // Eliminada lógica de handleTableClick compleja y handleConfirmOccupation
-
   return (
     <div style={styles.pageContainer}>
       
@@ -102,8 +101,13 @@ export const TablesPage: React.FC = () => {
         user={CURRENT_USER}
       />
 
-      {/* Eliminado el bloque del TableOccupationModal */}
+      {/* --- NUEVO MODAL DE NOTIFICACIONES --- */}
+      <NotificationsModal 
+        isOpen={isNotificationsOpen}
+        onClose={() => setIsNotificationsOpen(false)}
+      />
 
+      {/* Modal Logout */}
       {isLogoutModalOpen && (
           <div style={styles.modalOverlay}>
               <div style={styles.logoutModalContent}>
@@ -130,6 +134,7 @@ export const TablesPage: React.FC = () => {
           </div>
       )}
 
+      {/* HEADER COMPARTIDO */}
       <header style={styles.header}>
         <div style={{...styles.userInfo, cursor: 'pointer'}} onClick={() => setIsProfileOpen(true)}>
           <img src={CURRENT_USER.avatarUrl} alt="User Avatar" style={styles.mainAvatar} />
@@ -156,12 +161,19 @@ export const TablesPage: React.FC = () => {
                  <span style={{...styles.switchText, color: viewMode === 'takeout' ? '#333' : '#999'}}>Llevar</span>
             </div>
           </div>
+          
+          {/* --- NUEVO BOTÓN DE NOTIFICACIONES --- */}
+          <button style={styles.iconButton} title="Notificaciones" onClick={() => setIsNotificationsOpen(true)}>
+             <BellIconHeader />
+          </button>
+
           <button style={styles.iconButton} title="Cerrar Sesión" onClick={() => setIsLogoutModalOpen(true)}>
              <LogoutIcon />
           </button>
         </div>
       </header>
 
+      {/* CONTENIDO DINÁMICO */}
       {viewMode === 'tables' ? (
         <>
             <div style={styles.controlsContainer}>
@@ -210,7 +222,7 @@ export const TablesPage: React.FC = () => {
                 <div 
                     key={table.id} 
                     style={{...styles.tableCard, border: statusStyle.border}}
-                    onClick={() => navigate('/menu')} // Restaurada la navegación simple
+                    onClick={() => navigate('/menu')} 
                 >
                     <div style={styles.cardHeader}>
                     <h3 style={styles.tableName}>{table.name}</h3>
@@ -278,7 +290,7 @@ const styles: { [key: string]: React.CSSProperties } = {
   searchContainer: { flex: 1, position: 'relative', display: 'flex', alignItems: 'center' },
   searchIconWrapper: { position: 'absolute', left: '20px', display: 'flex', pointerEvents: 'none' },
   
-  // MANTENIENDO ESTILOS CORREGIDOS
+  // ESTILOS CORREGIDOS (INPUT & SELECT)
   searchInput: { 
       width: '58%', 
       height: '65px', 
