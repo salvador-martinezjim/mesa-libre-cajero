@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { ProfileModal } from '../components/ProfileModal'; 
 // 1. Importación del Modal de Notificaciones
 import { NotificationsModal } from '../components/NotificationsModal';
+import { useAuth } from '../context/AuthContext';
 
 // --- 1. Tipos e Interfaces ---
 type TableStatus = 'available' | 'occupied' | 'reserved';
@@ -55,6 +56,7 @@ const BellIconHeader = () => (<svg xmlns="http://www.w3.org/2000/svg" width="28"
 // --- 4. Componente Principal ---
 export const TablesPage: React.FC = () => {
   const navigate = useNavigate();
+  const { logout } = useAuth();
   
   const [tables, setTables] = useState<Table[]>(INITIAL_TABLES);
   
@@ -89,7 +91,10 @@ export const TablesPage: React.FC = () => {
   const handleLogout = () => {
       console.log("Cerrando sesión...");
       setIsLogoutModalOpen(false);
-      navigate('/login');
+      
+      // CAMBIO CLAVE:
+      logout(); 
+      // El router detectará que isAuthenticated es false y te mandará al login solo.
   };
 
   return (
