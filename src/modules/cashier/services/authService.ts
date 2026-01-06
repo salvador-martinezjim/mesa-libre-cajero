@@ -1,30 +1,41 @@
 import api from '../../../api/axiosInstance';
 
-// CORRECCIÓN: Cambiamos 'token' por 'accessToken'
-interface LoginResponse {
-    accessToken: string; 
-    usuario?: {
+// --- CORRECCIÓN AQUÍ: Definimos la estructura completa que manda tu backend ---
+export interface LoginResponse {
+    accessToken: string;
+    infoUsuario: {
         nombre: string;
-        rol: string;
-    }
+        apellidoPaterno: string;
+        tipo: string;     // Ej: "Cajero"
+        fotoUrl: string;
+        estado: string;   // Ej: "Activo"
+    };
 }
 
-export const loginService = async (correo: string, contrasenia: string) => {
+export const loginService = async (correo: string, contrasenia: string): Promise<LoginResponse> => {
     try {
         const response = await api.post<LoginResponse>('/login', { 
-            correo: correo,
-            contraseña: contrasenia
+            correo, 
+            contraseña: contrasenia 
         });
         
-        // Si el login es exitoso, guardamos el token
-        // CORRECCIÓN: Usamos response.data.accessToken
-        if (response.data.accessToken) {
-            localStorage.setItem('token', response.data.accessToken);
-        }
-
         return response.data;
     } catch (error) {
         console.error("Error en loginService:", error);
+        throw error;
+    }
+};
+
+export const forgotPasswordService = async (email: string) => {
+    const clientUri = 'http://137.184.191.81/reset-password.html';
+    try {
+        const response = await api.post('/password/forgot', { 
+            email: email,
+            clientUri: clientUri
+        });
+        return response.data;
+    } catch (error) {
+        console.error("Error en forgotPasswordService:", error);
         throw error;
     }
 };

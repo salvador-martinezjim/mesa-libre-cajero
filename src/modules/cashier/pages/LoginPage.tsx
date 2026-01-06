@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import logoPng from '../../../assets/logo_color.png'; 
-import { loginService } from '../services/authService';
+// 1. IMPORTAMOS AMBOS SERVICIOS
+import { loginService, forgotPasswordService } from '../services/authService';
 import { useAuth } from '../context/AuthContext';
 
 // --- Iconos SVG ---
@@ -12,7 +13,7 @@ const EyeOffIcon = () => (<svg width="24" height="24" viewBox="0 0 24 24" fill="
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
-  const { login } = useAuth(); // Hook de autenticación
+  const { login } = useAuth(); 
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -23,51 +24,69 @@ export const LoginPage: React.FC = () => {
   const [showForgotModal, setShowForgotModal] = useState(false);
   const [forgotEmail, setForgotEmail] = useState("");
   const [forgotStatus, setForgotStatus] = useState<{ type: 'success' | 'error', msg: string } | null>(null);
+  const [isSendingEmail, setIsSendingEmail] = useState(false); // Estado de carga para el modal
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setErrorMessage("");
-    setIsLoading(true);
+    // ... (validaciones previas) ...
 
     try {
-        // Llamada al servicio real
-        const data = await loginService(email, password);
-        
-        // CORRECCIÓN: Verificamos 'accessToken' en lugar de 'token'
-        if (data.accessToken) {
-            login(data.accessToken);
-            // La redirección a '/mesas' es automática gracias al AuthContext y AppRouter
-        } else {
-            setErrorMessage("Error: La respuesta del servidor no contiene credenciales válidas.");
-        }
-        
-    } catch (error: any) {
-        console.error("Error completo:", error);
-        
-        if (error.response) {
-            if (error.response.status === 401 || error.response.status === 400) {
-                setErrorMessage("Correo o contraseña incorrectos.");
-            } else {
-                setErrorMessage(`Error del servidor (${error.response.status}). Intenta más tarde.`);
-            }
-        } else if (error.request) {
-            setErrorMessage("No se pudo conectar con el servidor. Verifica tu internet o el Proxy.");
-        } else {
-            setErrorMessage("Ocurrió un error inesperado al iniciar sesión.");
-        }
+      const data = await loginService(email, password);
+      
+      if (data && data.accessToken) {
+        // 1. Guardamos el Token (esto ya lo hacías)
+        login(data.accessToken);
+
+        // --- NUEVO: GUARDAR INFO DE USUARIO ---
+        // Guardamos el objeto 'infoUsuario' que viene del back
+        localStorage.setItem('userData', JSON.stringify(data.infoUsuario));
+        // Guardamos el email que escribiste en el input (porque el back no lo devuelve en infoUsuario)
+        localStorage.setItem('userEmail', email); 
+        // --------------------------------------
+
+        navigate('/tables');
+      } else {
+        setErrorMessage('Credenciales inválidas');
+      }
+    } catch (error) {
+      console.error(error);
+      setErrorMessage('Error al iniciar sesión. Verifique sus datos.');
     } finally {
-        setIsLoading(false);
+      setIsLoading(false);
     }
   };
 
-  const handleForgotPassword = (e: React.FormEvent) => {
+  // --- LÓGICA DE RECUPERACIÓN REAL ---
+ const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Simulación
-    setForgotStatus({ type: 'success', msg: 'Se ha enviado un enlace a tu correo.' });
-    setTimeout(() => {
-        setShowForgotModal(false);
-        setForgotStatus(null);
-    }, 2000);
+    setForgotStatus(null);
+    setIsSendingEmail(true);
+
+    try {
+        // Llamada al servicio (ya corregido con 'email')
+        await forgotPasswordService(forgotEmail);
+        
+        setForgotStatus({ 
+            type: 'success', 
+            msg: 'Si el correo existe, recibirás un enlace en breve.' 
+        });
+        
+        // Cierre automático del modal
+        setTimeout(() => {
+            setShowForgotModal(false);
+            setForgotStatus(null);
+            setForgotEmail(""); 
+        }, 3000);
+
+    } catch (error) {
+        console.error("Error recuperando:", error);
+        setForgotStatus({ 
+            type: 'error', 
+            msg: 'Hubo un problema. Verifica que el correo esté bien escrito.' 
+        });
+    } finally {
+        setIsSendingEmail(false);
+    }
   };
 
   return (
@@ -83,12 +102,11 @@ export const LoginPage: React.FC = () => {
         </h2>
       </div>
 
-      {/* Formulario */}
+      {/* Formulario Login */}
       <div style={styles.formSection}>
         <div style={styles.formWrapper}>
           <h2 style={styles.title}>Iniciar sesión</h2>
 
-          {/* Banner de Error */}
           {errorMessage && (
               <div style={styles.errorBanner}>
                   {errorMessage}
@@ -159,7 +177,7 @@ export const LoginPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Modal Recuperar Contraseña */}
+      {/* --- MODAL RECUPERAR CONTRASEÑA (CONECTADO) --- */}
       {showForgotModal && (
         <div style={styles.modalOverlay}>
           <div style={styles.modalContent}>
@@ -182,8 +200,25 @@ export const LoginPage: React.FC = () => {
                 </p>
               )}
               <div style={styles.modalButtons}>
-                <button type="button" onClick={() => setShowForgotModal(false)} style={styles.cancelButton}>Cancelar</button>
-                <button type="submit" style={styles.sendButton}>Enviar enlace</button>
+                <button 
+                    type="button" 
+                    onClick={() => setShowForgotModal(false)} 
+                    style={styles.cancelButton}
+                    disabled={isSendingEmail}
+                >
+                    Cancelar
+                </button>
+                <button 
+                    type="submit" 
+                    style={{
+                        ...styles.sendButton,
+                        opacity: isSendingEmail ? 0.7 : 1,
+                        cursor: isSendingEmail ? 'not-allowed' : 'pointer'
+                    }}
+                    disabled={isSendingEmail}
+                >
+                    {isSendingEmail ? 'Enviando...' : 'Enviar enlace'}
+                </button>
               </div>
             </form>
           </div>

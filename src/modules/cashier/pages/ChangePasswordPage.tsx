@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+// Importamos el servicio nuevo
+import { changePasswordService } from '../services/usersServices';
 
 // --- Iconos ---
 const ArrowLeftIcon = () => (
@@ -21,28 +23,52 @@ const EyeOffIcon = () => (
 export const ChangePasswordPage: React.FC = () => {
   const navigate = useNavigate();
   
-  // Estados para inputs y visibilidad
+  // Estados para inputs
+  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  
+  // Estados de interfaz
+  const [showCurrent, setShowCurrent] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  
+  // NUEVO: Estados de carga y error
+  const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Validación simple
-  const isValid = newPassword.length > 0 && newPassword === confirmPassword;
+  const isValid = currentPassword.length > 0 && newPassword.length > 0 && newPassword === confirmPassword;
 
-  const handleSubmit = () => {
-    if (isValid) {
-      // Aquí iría la lógica real de cambio de contraseña con el backend
-      console.log("Contraseña cambiada exitosamente");
-      alert("¡Contraseña actualizada!");
-      navigate(-1); // Regresa a la página anterior
+  const handleSubmit = async () => {
+    if (!isValid) return;
+
+    setLoading(true);
+    setErrorMsg(null);
+
+    try {
+      // Llamada al backend
+      await changePasswordService(currentPassword, newPassword, confirmPassword);
+      
+      // Éxito
+      alert("¡Contraseña actualizada correctamente!");
+      navigate(-1); 
+
+    } catch (error: any) {
+      // Manejo de error
+      console.error(error);
+      if (error.response && error.response.status === 400) {
+          setErrorMsg("La contraseña actual es incorrecta o los datos no son válidos.");
+      } else {
+          setErrorMsg("Ocurrió un error al intentar cambiar la contraseña.");
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <div style={styles.container}>
       
-      {/* Header Simple */}
       <div style={styles.header}>
         <button onClick={() => navigate(-1)} style={styles.backButton}>
           <ArrowLeftIcon />
@@ -52,13 +78,35 @@ export const ChangePasswordPage: React.FC = () => {
       <div style={styles.content}>
         <h1 style={styles.title}>Configura tu contraseña</h1>
         <p style={styles.subtitle}>
-          Por seguridad, actualiza tu contraseña para continuar.
+          Por seguridad, ingresa tu contraseña actual y luego la nueva.
         </p>
 
-        {/* Formulario */}
+        {/* Mensaje de Error Visual */}
+        {errorMsg && (
+            <div style={{backgroundColor: '#FFEBEB', color: '#FF4C4C', padding: '10px', borderRadius: '8px', marginBottom: '20px', fontSize: '14px', textAlign: 'center'}}>
+                {errorMsg}
+            </div>
+        )}
+
         <div style={styles.formContainer}>
           
-          {/* Input Nueva Contraseña */}
+          {/* Contraseña Actual */}
+          <div style={styles.inputGroup}>
+            <div style={styles.inputIconLeft}><LockIcon /></div>
+            <input 
+              type={showCurrent ? "text" : "password"} 
+              placeholder="Contraseña actual"
+              style={styles.input}
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              disabled={loading}
+            />
+            <button onClick={() => setShowCurrent(!showCurrent)} style={styles.inputIconRight}>
+              {showCurrent ? <EyeOffIcon /> : <EyeIcon />}
+            </button>
+          </div>
+
+          {/* Nueva Contraseña */}
           <div style={styles.inputGroup}>
             <div style={styles.inputIconLeft}><LockIcon /></div>
             <input 
@@ -67,16 +115,14 @@ export const ChangePasswordPage: React.FC = () => {
               style={styles.input}
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
+              disabled={loading}
             />
-            <button 
-              onClick={() => setShowNew(!showNew)} 
-              style={styles.inputIconRight}
-            >
+            <button onClick={() => setShowNew(!showNew)} style={styles.inputIconRight}>
               {showNew ? <EyeOffIcon /> : <EyeIcon />}
             </button>
           </div>
 
-          {/* Input Confirmar Contraseña */}
+          {/* Confirmar Contraseña */}
           <div style={styles.inputGroup}>
             <div style={styles.inputIconLeft}><LockIcon /></div>
             <input 
@@ -85,35 +131,32 @@ export const ChangePasswordPage: React.FC = () => {
               style={styles.input}
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
+              disabled={loading}
             />
-            <button 
-              onClick={() => setShowConfirm(!showConfirm)} 
-              style={styles.inputIconRight}
-            >
+            <button onClick={() => setShowConfirm(!showConfirm)} style={styles.inputIconRight}>
               {showConfirm ? <EyeOffIcon /> : <EyeIcon />}
             </button>
           </div>
 
-          {/* Mensaje de error si no coinciden (opcional) */}
           {newPassword && confirmPassword && newPassword !== confirmPassword && (
-             <p style={{color: 'red', fontSize: '12px', marginTop: '-10px', marginBottom: '10px'}}>Las contraseñas no coinciden</p>
+             <p style={{color: 'red', fontSize: '12px', marginTop: '-10px', marginBottom: '10px'}}>Las contraseñas nuevas no coinciden</p>
           )}
 
-          {/* Botón de Acción */}
           <button 
             style={{
               ...styles.submitButton,
-              backgroundColor: isValid ? '#E0E0E0' : '#E0E0E0', // Base gris
-              backgroundImage: isValid ? 'linear-gradient(to right, #FF9F43, #FFB46A)' : 'none', // Naranja si es válido
-              color: isValid ? '#fff' : '#999',
-              cursor: isValid ? 'pointer' : 'not-allowed',
-              transform: isValid ? 'translateY(0)' : 'none',
-              boxShadow: isValid ? '0 4px 15px rgba(255, 159, 67, 0.3)' : 'none'
+              backgroundColor: isValid && !loading ? '#E0E0E0' : '#E0E0E0', 
+              backgroundImage: isValid && !loading ? 'linear-gradient(to right, #FF9F43, #FFB46A)' : 'none',
+              color: isValid && !loading ? '#fff' : '#999',
+              cursor: isValid && !loading ? 'pointer' : 'not-allowed',
+              transform: isValid && !loading ? 'translateY(0)' : 'none',
+              boxShadow: isValid && !loading ? '0 4px 15px rgba(255, 159, 67, 0.3)' : 'none',
+              opacity: loading ? 0.7 : 1
             }}
-            disabled={!isValid}
+            disabled={!isValid || loading}
             onClick={handleSubmit}
           >
-            Cambiar Contraseña
+            {loading ? 'Actualizando...' : 'Cambiar Contraseña'}
           </button>
 
         </div>
@@ -125,7 +168,7 @@ export const ChangePasswordPage: React.FC = () => {
 // --- Estilos ---
 const styles: { [key: string]: React.CSSProperties } = {
   container: {
-    backgroundColor: '#fff', // Fondo blanco limpio como en la imagen
+    backgroundColor: '#fff', 
     minHeight: '100vh',
     display: 'flex',
     flexDirection: 'column',
@@ -148,12 +191,12 @@ const styles: { [key: string]: React.CSSProperties } = {
     flex: 1,
     display: 'flex',
     flexDirection: 'column',
-    maxWidth: '480px', // Ancho máximo para que parezca app móvil en pantallas grandes
+    maxWidth: '480px', 
     width: '100%',
     margin: '0 auto',
     padding: '20px 30px',
     boxSizing: 'border-box',
-    justifyContent: 'center', // Centrar verticalmente un poco
+    justifyContent: 'center', 
     marginBottom: '100px'
   },
   title: {
@@ -182,7 +225,7 @@ const styles: { [key: string]: React.CSSProperties } = {
   },
   input: {
     width: '100%',
-    padding: '18px 50px', // Espacio para iconos izq y der
+    padding: '18px 50px', 
     borderRadius: '16px',
     border: '1px solid #F0F0F0',
     backgroundColor: '#FAFAFA',
