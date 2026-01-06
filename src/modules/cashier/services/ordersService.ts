@@ -1,30 +1,26 @@
 import api from '../../../api/axiosInstance';
 
-// --- Interfaces según Swagger ---
+// Interfaces
 interface OrderDetailDTO {
     productoId: number;
     cantidad: number;
-    complementosIds: number[];       // Array vacío por ahora
-    exclusionProductoIds: number[];  // Array vacío por ahora
+    complementosIds: number[];
+    exclusionProductoIds: number[];
     comentario: string;
 }
 
 interface CreateOrderPayload {
-    tipoOrden: string;      // "Llevar"
-    mesasIds: number[];     // Vacío
+    tipoOrden: string;
+    mesasIds: number[];
     comensales: number;
     detallesOrden: {
-        comensal: string;   // Nombre del cliente
+        comensal: string;
         orderDetailDTOs: OrderDetailDTO[];
     };
     pago: {
-        tipoPago: string;   // "Efectivo" o "Tarjeta"
-        tarjeta: {
-            estado: string; // Ej: "Pagado"
-        };
-        efectivo: {
-            recibido: number;
-        };
+        tipoPago: string;
+        tarjeta: { estado: string; };
+        efectivo: { recibido: number; };
     };
 }
 
@@ -32,14 +28,12 @@ export const createOrderService = async (
     customerName: string, 
     cartItems: any[], 
     total: number, 
-    paymentMethod: 'cash' | 'card'
+    paymentMethod: 'cash' | 'card',
+    cashAmountReceived?: number 
 ) => {
     try {
-        // 1. Validar que los productos tengan ID válido (evita el Error 500 "ID: 0")
         const detalles: OrderDetailDTO[] = cartItems.map(item => {
-            if (!item.id || item.id === 0) {
-                throw new Error(`El producto "${item.name}" tiene un ID inválido.`);
-            }
+            if (!item.id || item.id === 0) throw new Error(`ID inválido en producto: ${item.name}`);
             return {
                 productoId: item.id,
                 cantidad: item.quantity,
@@ -49,10 +43,18 @@ export const createOrderService = async (
             };
         });
 
-        // 2. Construir el Payload exacto como pide el Swagger
+        // Calculamos el monto recibido real
+        const montoRecibido = paymentMethod === 'cash' && cashAmountReceived 
+            ? cashAmountReceived 
+            : 0; // Si es tarjeta, no recibimos efectivo
+
+        // --- CORRECCIÓN DE LÓGICA ---
+        // El estado de la tarjeta debe ser coherente con el método de pago
+        const estadoTarjeta = paymentMethod === 'card' ? "Pagado" : "Pendiente";
+
         const payload: CreateOrderPayload = {
             tipoOrden: "Llevar",
-            mesasIds: [],
+            mesasIds: [], // Enviamos array vacío
             comensales: 1,
             detallesOrden: {
                 comensal: customerName || "Cliente Mostrador",
@@ -61,17 +63,16 @@ export const createOrderService = async (
             pago: {
                 tipoPago: paymentMethod === 'cash' ? "Efectivo" : "Tarjeta",
                 tarjeta: {
-                    estado: "Pagado" // Asumimos que si llega aquí, ya se cobró
+                    estado: estadoTarjeta // "Pendiente" si es efectivo, "Pagado" si es tarjeta
                 },
                 efectivo: {
-                    recibido: total // Asumimos pago exacto por ahora
+                    recibido: montoRecibido // Cantidad o 0
                 }
             }
         };
 
-        console.log("📤 Payload enviado a /orders:", JSON.stringify(payload, null, 2));
-
-        // 3. Enviar
+        console.log("📤 Payload corregido:", JSON.stringify(payload, null, 2));
+        
         const response = await api.post('/orders', payload);
         return response.data;
 

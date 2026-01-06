@@ -157,8 +157,17 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({ isOpen, onClose, o
     };
   };
 
-  const handlePaymentSuccess = () => {
-    const newOrder = createOrderObject(true); 
+  const handlePaymentSuccess = (methodUsed: string) => { 
+    // ^^^ Recibimos el string desde PaymentModal (ej: "Efectivo")
+    
+    console.log("Pago exitoso con:", methodUsed);
+    
+    // Creamos la orden con el dato pegado
+    const newOrder = {
+        ...createOrderObject(true),
+        paymentMethod: methodUsed // <--- AQUÍ GUARDAMOS EL DATO PARA EL DETALLE
+    };
+    
     onOrderCreated(newOrder); 
     setShowPaymentModal(false); 
     onClose();

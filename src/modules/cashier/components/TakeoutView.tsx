@@ -1,11 +1,11 @@
 import React, { useState, useMemo } from 'react';
 import { NewOrderModal } from './NewOrderModal';
 import { PaymentModal } from './PaymentModal'; 
+import { OrderDetailModal } from './OrderDetailModal'; // <--- Importamos el nuevo modal
 // Importamos los datos y funciones desde el Contexto Global
-import { useOrders, type OrderData } from '../context/OrdersContext.tsx';
+import { useOrders, type OrderData } from '../context/OrdersContext';
 
 // --- Iconos ---
-const PhoneIcon = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>;
 const ClockIconSmall = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>;
 const BagIcon = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line><path d="M16 10a4 4 0 0 1-8 0"></path></svg>;
 const SearchIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>;
@@ -16,19 +16,20 @@ const FILTER_TABS = ['Todos', 'Pendientes', 'Preparando', 'Listos'];
 export const TakeoutView: React.FC = () => {
   const [activeTab, setActiveTab] = useState('Todos');
   const [searchTerm, setSearchTerm] = useState('');
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isNewOrderModalOpen, setIsNewOrderModalOpen] = useState(false);
 
   // --- USO DEL CONTEXTO (GLOBAL) ---
   const { orders, addOrder, markOrderAsPaid } = useOrders();
 
-  // Estado para la orden que se va a pagar (local)
-  const [selectedOrder, setSelectedOrder] = useState<OrderData | null>(null);
+  // --- ESTADOS PARA MODALES ---
+  const [paymentOrder, setPaymentOrder] = useState<OrderData | null>(null); // Orden a pagar
+  const [detailOrder, setDetailOrder] = useState<any>(null); // Orden a ver detalle
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
 
   // --- LÓGICA DE FILTRADO ---
   const filteredOrders = useMemo(() => {
     return orders.filter(order => {
       // 1. Filtro por Tabs (Estado)
-      // Ajustamos nombres singulares/plurales
       if (activeTab !== 'Todos') {
         const statusMap: {[key: string]: string} = {
             'Pendientes': 'Pendiente',
@@ -38,7 +39,7 @@ export const TakeoutView: React.FC = () => {
         if (order.status !== statusMap[activeTab]) return false;
       }
 
-      // 2. Filtro por Buscador (Nombre, ID o Teléfono)
+      // 2. Filtro por Buscador
       if (searchTerm) {
         const lowerSearch = searchTerm.toLowerCase();
         return (
@@ -54,40 +55,66 @@ export const TakeoutView: React.FC = () => {
 
   // --- MANEJADORES DE EVENTOS ---
 
-  // 1. Agregar nueva orden (Usando función del Contexto)
   const handleNewOrderCreated = (newOrder: OrderData) => {
-    addOrder(newOrder); // <--- Corrección: Usamos addOrder del contexto
-    setIsModalOpen(false);
+    addOrder(newOrder); 
+    setIsNewOrderModalOpen(false);
   };
 
-  // 2. Click en tarjeta
+  // Lógica Inteligente de Clic en Tarjeta
   const handleCardClick = (order: OrderData) => {
     if (!order.isPaid) {
-      setSelectedOrder(order);
+      // Si NO está pagada -> Abrir Modal de Pago
+      setPaymentOrder(order);
+    } else {
+      // Si YA está pagada -> Abrir Modal de Detalle
+      setDetailOrder(order);
+      setIsDetailOpen(true);
     }
   };
 
-  // 3. Confirmación de pago (Usando función del Contexto)
-  const handlePaymentSuccessForExistingOrder = () => {
-    if (!selectedOrder) return;
-    markOrderAsPaid(selectedOrder.id); // <--- Corrección: Usamos markOrderAsPaid del contexto
-    setSelectedOrder(null);
+  const handlePaymentSuccess = (method: string) => { // Acepta el string
+    if (!paymentOrder) return;
+    // Aquí podrías guardar 'method' en el contexto si quisieras, 
+    // por ahora solo marcamos como pagado.
+    markOrderAsPaid(paymentOrder.id); 
+    setPaymentOrder(null);
   };
 
   return (
     <div style={styles.container}>
       
-      {/* Modal para CREAR pedidos */}
+      {/* 1. Modal Nuevo Pedido */}
       <NewOrderModal 
-        isOpen={isModalOpen} 
-        onClose={() => setIsModalOpen(false)} 
+        isOpen={isNewOrderModalOpen} 
+        onClose={() => setIsNewOrderModalOpen(false)} 
         onOrderCreated={handleNewOrderCreated} 
+      />
+
+      {/* 2. Modal de Pago (Solo si hay orden seleccionada para pago) */}
+      {paymentOrder && (
+        <PaymentModal
+          isOpen={!!paymentOrder}
+          onClose={() => setPaymentOrder(null)}
+          onBack={() => setPaymentOrder(null)}
+          // ACEPTAMOS EL ARGUMENTO AUNQUE NO LO USEMOS EN ESTE CASO ESPECÍFICO
+          onConfirm={(method) => handlePaymentSuccess(method)} 
+          total={paymentOrder.total}
+          customerName={paymentOrder.customerName}
+          customerPhone={paymentOrder.customerPhone}
+          items={paymentOrder.items || []}
+        />
+      )}
+
+      {/* 3. Modal de Detalle (Solo si hay orden seleccionada para ver) */}
+      <OrderDetailModal 
+        isOpen={isDetailOpen} 
+        onClose={() => setIsDetailOpen(false)} 
+        order={detailOrder} 
       />
       
       {/* Barra Superior */}
       <div style={styles.topBar}>
         <div style={styles.searchContainer}>
-          {/* Wrapper ajustado para centrar el icono en base a la nueva altura */}
           <div style={styles.searchIconWrapper}><SearchIcon /></div>
           <input 
             type="text" 
@@ -104,7 +131,6 @@ export const TakeoutView: React.FC = () => {
               key={tab}
               style={{
                 ...styles.tab,
-                // Lógica de estilos copiada de TablesPage.tsx (CategoryPill)
                 backgroundColor: activeTab === tab ? '#FF9F43' : '#FFFFFF',
                 color: activeTab === tab ? '#FFFFFF' : '#666666',
                 border: activeTab === tab ? 'none' : '1px solid #E0E0E0'
@@ -132,10 +158,10 @@ export const TakeoutView: React.FC = () => {
                  key={order.id} 
                  style={{
                    ...styles.orderCard,
-                   cursor: !order.isPaid ? 'pointer' : 'default',
-                   opacity: order.isPaid ? 0.8 : 1
+                   // Feedback visual: opacidad ligera si ya pagó
+                   opacity: order.isPaid ? 0.85 : 1
                  }}
-                 onClick={() => handleCardClick(order)}
+                 onClick={() => handleCardClick(order)} // <--- CLIC AQUÍ
                >
                   <div style={styles.cardHeader}>
                       <span style={styles.orderId}>Pedido #{order.id}</span>
@@ -149,11 +175,7 @@ export const TakeoutView: React.FC = () => {
                   </div>
 
                   <h4 style={styles.customerName}>{order.customerName || "Cliente Mostrador"}</h4>
-                  
-                  <div style={styles.infoRow}>
-                      <PhoneIcon />
-                      <span>{order.customerPhone || "--"}</span>
-                  </div>
+                                      
                   <div style={styles.infoRow}>
                       <ClockIconSmall />
                       <span>15 min</span>
@@ -170,7 +192,7 @@ export const TakeoutView: React.FC = () => {
                            {order.isPaid ? (
                                <span style={{color: '#28C76F', fontSize: '12px', fontWeight: '700'}}>• PAGADO</span>
                            ) : (
-                               <span style={{color: '#FF9F43', fontSize: '12px', fontWeight: '700'}}>• PENDIENTE PAGO</span>
+                               <span style={{color: '#FF9F43', fontSize: '12px', fontWeight: '700'}}>• COBRAR</span>
                            )}
                       </div>
                       <div style={styles.totalPrice}>
@@ -183,24 +205,10 @@ export const TakeoutView: React.FC = () => {
         )}
       </div>
 
-      <button style={styles.fab} onClick={() => setIsModalOpen(true)}>
+      <button style={styles.fab} onClick={() => setIsNewOrderModalOpen(true)}>
         <PlusIcon />
         <span style={styles.fabText}>Nuevo Pedido</span>
       </button>
-
-      {/* MODAL DE PAGO */}
-      {selectedOrder && (
-        <PaymentModal
-          isOpen={!!selectedOrder}
-          onClose={() => setSelectedOrder(null)}
-          onBack={() => setSelectedOrder(null)}
-          onConfirm={handlePaymentSuccessForExistingOrder}
-          total={selectedOrder.total}
-          customerName={selectedOrder.customerName}
-          customerPhone={selectedOrder.customerPhone}
-          items={selectedOrder.items || []}
-        />
-      )}
 
     </div>
   );
@@ -220,7 +228,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     justifyContent: 'space-between',
     alignItems: 'center',
     gap: '30px',
-    marginBottom: '35px', // Ajustado a 35px para coincidir con controlsContainer
+    marginBottom: '35px', 
     width: '100%',
     flexWrap: 'wrap'
   },
@@ -234,15 +242,13 @@ const styles: { [key: string]: React.CSSProperties } = {
   searchIconWrapper: {
     position: 'absolute',
     left: '20px',
-    // Eliminamos el transform vertical porque el input ahora tiene altura fija y display flex lo centra
     display: 'flex',
     pointerEvents: 'none'
   },
-  // --- ESTILO DE INPUT CORREGIDO (IGUAL QUE TABLESPAGE) ---
   searchInput: {
     width: '100%', 
-    height: '65px', // Altura fija como en TablesPage
-    padding: '0 20px 0 50px', // Padding alineado
+    height: '65px', 
+    padding: '0 20px 0 50px', 
     borderRadius: '12px', 
     border: '1px solid #eee', 
     backgroundColor: '#FFFFFF', 
@@ -257,10 +263,9 @@ const styles: { [key: string]: React.CSSProperties } = {
     gap: '10px',
     flexWrap: 'wrap'
   },
-  // --- ESTILO DE TAB CORREGIDO (IGUAL QUE CATEGORYPILL) ---
   tab: {
     padding: '10px 20px',
-    borderRadius: '25px', // Pill shape
+    borderRadius: '25px', 
     fontSize: '14px',
     fontWeight: '600',
     cursor: 'pointer',
