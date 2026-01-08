@@ -102,6 +102,7 @@ export const TakeoutView: React.FC = () => {
           customerName={paymentOrder.customerName}
           customerPhone={paymentOrder.customerPhone}
           items={paymentOrder.items || []}
+          orderId={Number(paymentOrder.id)}
         />
       )}
 

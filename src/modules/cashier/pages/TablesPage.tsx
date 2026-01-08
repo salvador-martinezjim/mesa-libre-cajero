@@ -5,41 +5,41 @@ import { useNavigate } from 'react-router-dom';
 import { TakeoutView } from '../components/TakeoutView';
 import { ProfileModal } from '../components/ProfileModal'; 
 import { NotificationsModal } from '../components/NotificationsModal';
-// Ya no necesitamos getUserFromToken obligatoriamente, pero lo dejamos por si acaso
-import { getUserFromToken } from '../../../utils/jwtUtils'; 
-
-// Contexto
+import { PaymentModal } from '../components/PaymentModal'; 
+import { getUserFromToken } from '../../../utils/jwtUtils';
 import { useAuth } from '../context/AuthContext'; 
 
-// --- 1. Tipos y Datos Simulados ---
-type TableStatus = 'available' | 'occupied' | 'reserved';
+// Servicios
+import { getPendingOrdersService, type PendingOrder } from '../services/ordersService'; 
+
+// --- Tipos ---
+type TableStatus = 'available' | 'occupied';
 type ViewMode = 'tables' | 'takeout';
-type FilterStatus = 'all' | 'available' | 'occupied';
 
 interface Table {
   id: number;
   name: string;
   location: string;
-  status: TableStatus;
-  peopleCount: number;
 }
 
-const INITIAL_TABLES: Table[] = [
-  { id: 1, name: 'Mesa 1', location: 'Lobby', status: 'available', peopleCount: 0 },
-  { id: 2, name: 'Mesa 2', location: 'Lobby', status: 'available', peopleCount: 0 },
-  { id: 3, name: 'Mesa 3', location: 'Patio', status: 'available', peopleCount: 0 },
-  { id: 4, name: 'Mesa 4', location: 'Patio', status: 'available', peopleCount: 0 },
-  { id: 5, name: 'Mesa 5', location: 'Nueva Zona', status: 'available', peopleCount: 0 },
-  { id: 6, name: 'Mesa 6', location: 'Nueva Zona', status: 'available', peopleCount: 0 },
-  { id: 7, name: 'Mesa 7', location: 'Lobby', status: 'available', peopleCount: 0 },
-  { id: 8, name: 'Mesa 8', location: 'Terraza', status: 'available', peopleCount: 0 },
-  { id: 9, name: 'Mesa 9', location: 'Terraza', status: 'available', peopleCount: 0 },
-  { id: 10, name: 'Mesa 10', location: 'Terraza', status: 'available', peopleCount: 0 },
+// Datos fijos de tus mesas
+const FIXED_TABLES: Table[] = [
+  { id: 1, name: 'Mesa 1', location: 'Lobby' },
+  { id: 2, name: 'Mesa 2', location: 'Lobby' },
+  { id: 3, name: 'Mesa 3', location: 'Patio' },
+  { id: 4, name: 'Mesa 4', location: 'Patio' },
+  { id: 5, name: 'Mesa 5', location: 'Nueva Zona' },
+  { id: 6, name: 'Mesa 6', location: 'Nueva Zona' },
+  { id: 7, name: 'Mesa 7', location: 'Lobby' }, 
+  { id: 8, name: 'Mesa 8', location: 'Terraza' },
+  { id: 9, name: 'Mesa 9', location: 'Terraza' },
+  { id: 10, name: 'Mesa 10', location: 'Terraza' },
+  { id: 20, name: 'Mesa 20', location: 'Ejemplo Back' }, 
 ];
 
 const FILTER_CATEGORIES = ['Todas', 'Lobby', 'Nueva Zona', 'Patio', 'Terraza'];
 
-// --- Iconos SVG ---
+// Iconos (Sin cambios)
 const SearchIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>);
 const LogoutIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>);
 const PeopleIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="#666"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>);
@@ -49,14 +49,25 @@ const WarningIcon = () => (<svg width="24" height="24" viewBox="0 0 24 24" fill=
 const CloseIcon = () => (<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>);
 const BellIconHeader = () => (<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>);
 
-
 export const TablesPage: React.FC = () => {
   const navigate = useNavigate();
   const { logout } = useAuth();
   
-  const [tables] = useState<Table[]>(INITIAL_TABLES);
+  const [pendingOrders, setPendingOrders] = useState<PendingOrder[]>([]);
+  const [selectedOrderToPay, setSelectedOrderToPay] = useState<PendingOrder | null>(null);
 
-  // --- ESTADO DEL USUARIO ---
+  // Estados de interfaz
+  const [viewMode, setViewMode] = useState<ViewMode>('tables'); 
+  const [activeCategory, setActiveCategory] = useState('Todas');
+  
+  // --- NUEVO: Estado para el filtro de status ---
+  const [statusFilter, setStatusFilter] = useState<'all' | 'available' | 'occupied'>('all');
+
+  const [searchTerm, setSearchTerm] = useState('');
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+
   const [user, setUser] = useState({
     name: 'Cargando...',
     role: '',
@@ -64,72 +75,104 @@ export const TablesPage: React.FC = () => {
     avatarUrl: 'https://img.freepik.com/vector-premium/perfil-avatar-hombre-icono-redondo_24640-14044.jpg'
   });
 
-  // --- EFECTO: OBTENER DATOS REALES (LocalStorage) ---
   useEffect(() => {
-    // 1. Intentamos leer los datos que guardamos al hacer Login
     const storedUserData = localStorage.getItem('userData');
     const storedUserEmail = localStorage.getItem('userEmail');
-
     if (storedUserData) {
       try {
         const parsedData = JSON.parse(storedUserData);
-        
-        // 2. Mapeamos los datos del back a nuestro estado
-        // Back: { nombre: "Salvador", apellidoPaterno: "Martinez", tipo: "Cajero", fotoUrl: "..." }
         setUser({
           name: `${parsedData.nombre} ${parsedData.apellidoPaterno || ''}`,
           role: parsedData.tipo || 'Empleado',
-          email: storedUserEmail || 'Sin correo', // Este lo sacamos del input del login
+          email: storedUserEmail || 'Sin correo',
           avatarUrl: parsedData.fotoUrl || 'https://img.freepik.com/vector-premium/perfil-avatar-hombre-icono-redondo_24640-14044.jpg'
         });
-      } catch (e) {
-        console.error("Error al leer datos de usuario", e);
-      }
-    } else {
-        // Fallback: Si no hay localStorage, intentamos leer el token
-        const tokenData = getUserFromToken();
-        if (tokenData) {
-            setUser(prev => ({ ...prev, ...tokenData }));
-        }
+      } catch (e) { console.error(e); }
     }
   }, []);
 
-  // Estados de interfaz
-  const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
-  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
-
-  // Filtros y Vistas
-  const [viewMode, setViewMode] = useState<ViewMode>('tables'); 
-  const [activeCategory, setActiveCategory] = useState('Todas');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<FilterStatus>('all'); 
-
-  const getStatusStyles = (status: TableStatus) => {
-    if (status === 'available') return { bg: '#E6F4EA', text: '#1E8E3E', label: 'DISPONIBLE', border: '2px solid #D1E7DD' };
-    return { bg: '#eee', text: '#666', label: status, border: '2px solid #eee' };
+  const fetchOrders = async () => {
+    try {
+        const data = await getPendingOrdersService();
+        setPendingOrders(data);
+    } catch (error) {
+        console.error("Error cargando mesas:", error);
+    }
   };
 
-  const filteredTables = tables.filter(table => {
+  useEffect(() => {
+    if (viewMode === 'tables') fetchOrders();
+    const interval = setInterval(() => {
+        if (viewMode === 'tables') fetchOrders();
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [viewMode]);
+
+  const getTableStatus = (tableId: number): { status: TableStatus, order?: PendingOrder } => {
+    const order = pendingOrders.find(o => o.mesasIds && o.mesasIds.includes(tableId));
+    if (order) return { status: 'occupied', order };
+    return { status: 'available' };
+  };
+
+  const handleTableClick = (tableId: number, statusData: { status: TableStatus, order?: PendingOrder }) => {
+    if (statusData.status === 'occupied' && statusData.order) {
+        setSelectedOrderToPay(statusData.order);
+    } else {
+        navigate('/menu'); 
+    }
+  };
+
+  const handlePaymentConfirmed = (method: string) => {
+    alert(`Cobro registrado con ${method}.`);
+    setSelectedOrderToPay(null);
+    fetchOrders(); 
+  };
+
+  // --- LÓGICA DE FILTRADO MEJORADA ---
+  const filteredTables = FIXED_TABLES.filter(table => {
+    // 1. Calculamos el estado actual de la mesa (en tiempo real)
+    const { status } = getTableStatus(table.id);
+
+    // 2. Filtro por Estado (Nuevo)
+    const matchesStatus = 
+        statusFilter === 'all' || 
+        status === statusFilter;
+
+    // 3. Filtro por Buscador
     const matchesSearch = table.name.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = activeCategory === 'Todas' || table.location === activeCategory;
-    return matchesSearch && matchesCategory;
-  });
 
-  const handleLogout = () => {
-      setIsLogoutModalOpen(false);
-      // Limpiamos los datos del usuario al salir
-      localStorage.removeItem('userData');
-      localStorage.removeItem('userEmail');
-      logout();
-  };
+    // 4. Filtro por Ubicación (Categoría)
+    const matchesCategory = activeCategory === 'Todas' || table.location === activeCategory;
+
+    return matchesSearch && matchesCategory && matchesStatus;
+  });
 
   return (
     <div style={styles.pageContainer}>
       <ProfileModal isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} user={user} />
       <NotificationsModal isOpen={isNotificationsOpen} onClose={() => setIsNotificationsOpen(false)} />
 
-      {/* Modal Logout */}
+      {/* Modal de Pago para Mesas */}
+      {selectedOrderToPay && (
+        <PaymentModal
+            isOpen={!!selectedOrderToPay}
+            onClose={() => setSelectedOrderToPay(null)}
+            onBack={() => setSelectedOrderToPay(null)}
+            onConfirm={handlePaymentConfirmed}
+            // Datos básicos
+            total={selectedOrderToPay.pagos[0]?.total || 0} 
+            customerName={selectedOrderToPay.detallesOrden?.comensal || "Cliente Mesa"}
+            customerPhone=""
+            items={selectedOrderToPay.detallesOrden?.orderDetailDTOs || []} 
+            orderId={selectedOrderToPay.id}
+            
+            // Datos del mesero
+            waiterName={selectedOrderToPay.pagos[0]?.mesero?.nombre} 
+            receivedByWaiter={selectedOrderToPay.pagos[0]?.efectivoRecibidoMesero}
+            orderDate={selectedOrderToPay.pagos[0]?.fechaHoraEntregaEfectivo}
+        />
+      )}
+
       {isLogoutModalOpen && (
           <div style={styles.modalOverlay}>
               <div style={styles.logoutModalContent}>
@@ -146,13 +189,12 @@ export const TablesPage: React.FC = () => {
                   </div>
                   <div style={styles.logoutModalFooter}>
                       <button style={styles.cancelButton} onClick={() => setIsLogoutModalOpen(false)}>Cancelar</button>
-                      <button style={styles.confirmButton} onClick={handleLogout}>Sí, cerrar sesión</button>
+                      <button style={styles.confirmButton} onClick={() => { setIsLogoutModalOpen(false); logout(); }}>Sí, cerrar sesión</button>
                   </div>
               </div>
           </div>
       )}
 
-      {/* HEADER */}
       <header style={styles.header}>
         <div style={{...styles.userInfo, cursor: 'pointer'}} onClick={() => setIsProfileOpen(true)}>
           <img src={user.avatarUrl} alt="User Avatar" style={styles.mainAvatar} />
@@ -162,7 +204,6 @@ export const TablesPage: React.FC = () => {
           </div>
         </div>
         <div style={styles.headerActions}>
-          
           <div style={styles.modeSwitchContainer}>
             <div style={{...styles.switchOption, backgroundColor: viewMode === 'tables' ? '#fff' : 'transparent', boxShadow: viewMode === 'tables' ? '0 2px 5px rgba(0,0,0,0.1)' : 'none'}} onClick={() => setViewMode('tables')}>
                 <TableIcon color={viewMode === 'tables' ? '#FF9F43' : '#999'} />
@@ -173,23 +214,57 @@ export const TablesPage: React.FC = () => {
                  <span style={{...styles.switchText, color: viewMode === 'takeout' ? '#333' : '#999'}}>Llevar</span>
             </div>
           </div>
-
           <button style={styles.iconButton} title="Notificaciones" onClick={() => setIsNotificationsOpen(true)}><BellIconHeader /></button>
           <button style={styles.iconButton} title="Cerrar Sesión" onClick={() => setIsLogoutModalOpen(true)}><LogoutIcon /></button>
         </div>
       </header>
 
-      {/* CONTENIDO PRINCIPAL */}
       {viewMode === 'tables' ? (
         <>
-            {/* Controles de Filtro */}
             <div style={styles.controlsContainer}>
                 <div style={styles.leftControlsGroup}>
                     <div style={styles.searchContainer}>
                         <div style={styles.searchIconWrapper}><SearchIcon /></div>
                         <input type="text" placeholder="Buscar mesa..." style={styles.searchInput} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                     </div>
+
+                    {/* --- NUEVO: Botones de filtro de Estado --- */}
+                    <div style={styles.statusFilterContainer}>
+                        <button 
+                            style={{
+                                ...styles.statusFilterBtn, 
+                                backgroundColor: statusFilter === 'all' ? '#333' : '#eee',
+                                color: statusFilter === 'all' ? '#fff' : '#666'
+                            }}
+                            onClick={() => setStatusFilter('all')}
+                        >
+                            Todas
+                        </button>
+                        <button 
+                            style={{
+                                ...styles.statusFilterBtn, 
+                                backgroundColor: statusFilter === 'available' ? '#1E8E3E' : '#eee',
+                                color: statusFilter === 'available' ? '#fff' : '#666'
+                            }}
+                            onClick={() => setStatusFilter('available')}
+                        >
+                            Disponibles
+                        </button>
+                        <button 
+                            style={{
+                                ...styles.statusFilterBtn, 
+                                backgroundColor: statusFilter === 'occupied' ? '#FF9F43' : '#eee',
+                                color: statusFilter === 'occupied' ? '#fff' : '#666'
+                            }}
+                            onClick={() => setStatusFilter('occupied')}
+                        >
+                            Ocupadas
+                        </button>
+                    </div>
+                    {/* ------------------------------------------ */}
+
                 </div>
+                
                 <div style={styles.categoriesContainer}>
                 {FILTER_CATEGORIES.map(category => (
                     <button key={category} style={{...styles.categoryPill, backgroundColor: activeCategory === category ? '#FF9F43' : '#FFFFFF', color: activeCategory === category ? '#FFFFFF' : '#666666', border: activeCategory === category ? 'none' : '1px solid #E0E0E0'}} onClick={() => setActiveCategory(category)}>
@@ -199,37 +274,50 @@ export const TablesPage: React.FC = () => {
                 </div>
             </div>
 
-            {/* Grid de Mesas */}
             <div style={styles.tablesGrid}>
                 {filteredTables.map(table => {
-                    const statusStyle = getStatusStyles(table.status);
+                    const { status, order } = getTableStatus(table.id);
                     
+                    const isOccupied = status === 'occupied';
+                    const borderColor = isOccupied ? '#FF9F43' : '#D1E7DD';
+                    const statusLabel = isOccupied ? 'OCUPADA / POR PAGAR' : 'DISPONIBLE';
+                    const statusBg = isOccupied ? '#FFF5EB' : '#E6F4EA';
+                    const statusColor = isOccupied ? '#FF9F43' : '#1E8E3E';
+
                     return (
-                    <div key={table.id} style={{...styles.tableCard, border: statusStyle.border}} onClick={() => navigate('/menu')}>
+                    <div 
+                        key={table.id} 
+                        style={{...styles.tableCard, border: `2px solid ${borderColor}`}} 
+                        onClick={() => handleTableClick(table.id, { status, order })}
+                    >
                         <div style={styles.cardHeader}>
                             <h3 style={styles.tableName}>{table.name}</h3>
-                            <span style={{...styles.statusBadge, backgroundColor: statusStyle.bg, color: statusStyle.text}}>{statusStyle.label}</span>
+                            <span style={{...styles.statusBadge, backgroundColor: statusBg, color: statusColor}}>
+                                {statusLabel}
+                            </span>
                         </div>
                         <p style={styles.tableLocation}>{table.location}</p>
-                        
                         <div style={styles.peopleCountPill}>
                             <PeopleIcon />
-                            <span style={styles.peopleCountText}>0 personas</span>
+                            <span style={styles.peopleCountText}>
+                                {isOccupied ? `Orden #${order?.id}` : '0 personas'}
+                            </span>
                         </div>
-                        
-                        {/* Footer Simplificado: Sin meseros */}
                         <div style={styles.cardFooter}>
-                            <span style={styles.waiterLabelEmpty}>Lista para usar</span>
+                            {isOccupied && order ? (
+                                <div style={{width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+                                    <span style={{fontSize: '14px', color: '#666'}}>Total:</span>
+                                    <span style={{fontSize: '18px', fontWeight: '800', color: '#333'}}>
+                                        ${order.pagos[0]?.total.toFixed(2)}
+                                    </span>
+                                </div>
+                            ) : (
+                                <span style={styles.waiterLabelEmpty}>Lista para usar</span>
+                            )}
                         </div>
                     </div>
                     )
                 })}
-                
-                {filteredTables.length === 0 && (
-                    <div style={styles.noResults}>
-                        <p>No se encontraron mesas.</p>
-                    </div>
-                )}
             </div>
         </>
       ) : (
@@ -239,7 +327,7 @@ export const TablesPage: React.FC = () => {
   );
 };
 
-// --- Estilos (IGUALES A LOS TUYOS) ---
+// --- Estilos ---
 const styles: { [key: string]: React.CSSProperties } = {
   pageContainer: { backgroundColor: '#F8F9FA', minHeight: '100vh', width: '100%', maxWidth: '100vw', padding: '40px 60px', boxSizing: 'border-box', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' },
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '40px', width: '100%' },
@@ -252,16 +340,23 @@ const styles: { [key: string]: React.CSSProperties } = {
   modeSwitchContainer: { display: 'flex', backgroundColor: '#E9ECEF', padding: '4px', borderRadius: '12px', gap: '4px' },
   switchOption: { display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', borderRadius: '10px', cursor: 'pointer', transition: 'all 0.3s ease', userSelect: 'none' },
   switchText: { fontSize: '14px', fontWeight: '600' },
+  
+  // Controls
   controlsContainer: { display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'space-between', marginBottom: '35px', gap: '20px', flexWrap: 'wrap' },
-  leftControlsGroup: { display: 'flex', alignItems: 'center', gap: '15px', flex: 1, minWidth: '300px' },
-  searchContainer: { flex: 1, position: 'relative', display: 'flex', alignItems: 'center' },
+  leftControlsGroup: { display: 'flex', alignItems: 'center', gap: '20px', flex: 1, minWidth: '400px' },
+  
+  searchContainer: { flex: 1, position: 'relative', display: 'flex', alignItems: 'center', maxWidth: '350px' },
   searchIconWrapper: { position: 'absolute', left: '20px', display: 'flex', pointerEvents: 'none' },
-  searchInput: { width: '58%', height: '65px', padding: '0 20px 0 50px', borderRadius: '12px', border: '1px solid #eee', backgroundColor: '#FFFFFF', fontSize: '16px', color: '#333333', boxShadow: '0 2px 10px rgba(0,0,0,0.02)', outline: 'none', boxSizing: 'border-box' },
-  statusSelect: { padding: '0 20px', height: '65px', borderRadius: '12px', border: '1px solid #eee', backgroundColor: '#FFFFFF', fontSize: '15px', fontWeight: '500', color: '#444', cursor: 'pointer', outline: 'none', boxShadow: '0 2px 10px rgba(0,0,0,0.02)', minWidth: '160px', fontFamily: 'inherit' },
+  searchInput: { width: '100%', height: '65px', padding: '0 20px 0 50px', borderRadius: '12px', border: '1px solid #eee', backgroundColor: '#FFFFFF', fontSize: '16px', color: '#333333', boxShadow: '0 2px 10px rgba(0,0,0,0.02)', outline: 'none', boxSizing: 'border-box' },
+
+  // --- Estilos para filtro de status (NUEVOS) ---
+  statusFilterContainer: { display: 'flex', gap: '5px', backgroundColor: '#e0e0e0', padding: '5px', borderRadius: '12px' },
+  statusFilterBtn: { border: 'none', padding: '12px 15px', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: '600', transition: 'all 0.2s' },
+
   categoriesContainer: { display: 'flex', gap: '10px', flexWrap: 'wrap' },
   categoryPill: { padding: '10px 20px', borderRadius: '25px', fontSize: '14px', fontWeight: '600', cursor: 'pointer', whiteSpace: 'nowrap', boxShadow: '0 2px 5px rgba(0,0,0,0.02)', transition: 'all 0.2s' },
+  
   tablesGrid: { display: 'grid', width: '100%', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '30px' },
-  noResults: { width: '100%', gridColumn: '1 / -1', textAlign: 'center', padding: '40px', color: '#999', fontSize: '18px' },
   tableCard: { backgroundColor: '#FFFFFF', borderRadius: '24px', padding: '30px', boxShadow: '0 8px 20px rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column', cursor: 'pointer', transition: 'transform 0.2s, box-shadow 0.2s' },
   cardHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' },
   tableName: { margin: 0, fontSize: '24px', fontWeight: '800', color: '#333' },
@@ -270,11 +365,7 @@ const styles: { [key: string]: React.CSSProperties } = {
   peopleCountPill: { display: 'inline-flex', alignItems: 'center', backgroundColor: '#F5F6FA', padding: '10px 16px', borderRadius: '12px', marginBottom: '35px', alignSelf: 'flex-start' },
   peopleCountText: { marginLeft: '10px', fontSize: '16px', fontWeight: '600', color: '#666' },
   cardFooter: { marginTop: 'auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #f0f0f0', paddingTop: '20px', minHeight: '40px' },
-  waiterLabel: { fontSize: '15px', color: '#aaa', fontWeight: '500' },
   waiterLabelEmpty: { fontSize: '14px', color: '#ccc', fontStyle: 'italic' },
-  waiterInfo: { display: 'flex', alignItems: 'center', gap: '10px' },
-  waiterNameText: { fontSize: '15px', color: '#333', fontWeight: '600' },
-  smallAvatar: { width: '40px', height: '40px', borderRadius: '50%', border: '2px solid #fff', boxShadow: '0 0 0 2px #fff, 0 0 0 4px #1E8E3E', objectFit: 'cover' },
   modalOverlay: { position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 },
   logoutModalContent: { backgroundColor: '#fff', borderRadius: '16px', padding: '30px', width: '500px', maxWidth: '90%', boxShadow: '0 10px 30px rgba(0,0,0,0.1)', display: 'flex', flexDirection: 'column' },
   logoutModalHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' },

@@ -1,27 +1,37 @@
 import React, { useState, useEffect } from 'react';
-import { createOrderService } from '../services/ordersService';
+// Importamos AMBOS servicios
+import { createOrderService, payOrderService } from '../services/ordersService';
 
 interface PaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
   onBack: () => void;
-  // CAMBIO CLAVE: Ahora onConfirm recibe el método como texto
-  onConfirm: (paymentMethod: string) => void; 
+  onConfirm: (method: string) => void;
   total: number;
   customerName: string;
   customerPhone: string;
   items: any[];
+  
+  // Props opcionales
+  waiterName?: string;
+  receivedByWaiter?: number;
+  orderDate?: string;
+  orderId?: number; // <--- NUEVO: ID de la orden (si ya existe)
 }
 
-// Iconos (Sin cambios)
+// ... (ICONOS SE MANTIENEN IGUAL) ...
 const ArrowLeft = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#333" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>;
 const CashIcon = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"></rect><circle cx="12" cy="12" r="2"></circle><path d="M6 12h.01M18 12h.01"></path></svg>;
 const CardIcon = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line></svg>;
 const ReceiptIcon = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>;
 const UserIcon = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>;
+const WaiterIcon = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>;
+const CalendarIcon = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>;
+const MoneyHandIcon = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1E8E3E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>;
 
 export const PaymentModal: React.FC<PaymentModalProps> = ({ 
-    isOpen, onClose, onBack, onConfirm, total, customerName, items 
+    isOpen, onClose, onBack, onConfirm, total, customerName, items, 
+    waiterName, receivedByWaiter, orderDate, orderId 
 }) => {
   
   const [method, setMethod] = useState<'cash' | 'card'>('cash');
@@ -29,6 +39,10 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [cashReceivedStr, setCashReceivedStr] = useState('');
   const [change, setChange] = useState(0);
+
+  const formattedDate = orderDate ? new Date(orderDate).toLocaleString('es-MX', {
+      day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
+  }) : '';
 
   useEffect(() => {
     if (isOpen) {
@@ -64,11 +78,18 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
     setLoading(true);
 
     try {
-        await createOrderService(customerName, items, total, method, finalCashAmount);
+        // --- LÓGICA BILINGÜE ---
+        if (orderId) {
+            // CASO A: Mesa existente (Actualizamos estatus)
+            console.log(`Actualizando orden ${orderId}...`);
+            await payOrderService(orderId, method, finalCashAmount);
+        } else {
+            // CASO B: Nuevo pedido para llevar (Creamos orden)
+            console.log("Creando nueva orden...");
+            await createOrderService(customerName, items, total, method, finalCashAmount);
+        }
         
         alert(`✅ ¡Cobro exitoso!\n\n${method === 'cash' ? `Cambio a devolver: $${change.toFixed(2)}` : ''}`);
-        
-        // --- AQUÍ EL CAMBIO: Enviamos el nombre bonito del método ---
         onConfirm(method === 'cash' ? 'Efectivo' : 'Tarjeta'); 
 
     } catch (error: any) {
@@ -99,25 +120,50 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
         </div>
 
         <div style={styles.bodyContent}>
-            {/* Resumen */}
+            {/* Resumen (Izquierda) */}
             <div style={styles.summaryColumn}>
                 <div style={styles.customerInfo}>
                     <div style={styles.infoRow}>
                         <UserIcon />
                         <span style={styles.customerName}>{customerName || "Cliente Mostrador"}</span>
                     </div>
-                    <div style={styles.orderLabel}>
-                        <ReceiptIcon />
-                        <span>Resumen de productos</span>
+                </div>
+
+                {/* Info del Mesero */}
+                {waiterName && (
+                    <div style={styles.waiterInfoBox}>
+                        <div style={styles.waiterRow}>
+                            <WaiterIcon />
+                            <span>Atendió: <strong>{waiterName}</strong></span>
+                        </div>
+                        {orderDate && (
+                            <div style={styles.waiterRow}>
+                                <CalendarIcon />
+                                <span>{formattedDate}</span>
+                            </div>
+                        )}
+                        {receivedByWaiter !== undefined && (
+                            <div style={styles.waiterRow}>
+                                <MoneyHandIcon />
+                                <span>Recibido por mesero: <strong style={{color: '#1E8E3E'}}>${receivedByWaiter.toFixed(2)}</strong></span>
+                            </div>
+                        )}
                     </div>
+                )}
+
+                <div style={styles.orderLabel}>
+                    <ReceiptIcon />
+                    <span>Resumen de productos</span>
                 </div>
                 <div style={styles.itemsList}>
                     {items.map((item, index) => (
                         <div key={index} style={styles.itemRow}>
-                            <div style={styles.itemQuantity}>{item.quantity}x</div>
+                            <div style={styles.itemQuantity}>{item.quantity || 1}x</div>
                             <div style={styles.itemDetails}>
-                                <span style={styles.itemName}>{item.name}</span>
-                                <span style={styles.itemPrice}>${(item.price * item.quantity).toFixed(2)}</span>
+                                <span style={styles.itemName}>{item.name || item.productoId}</span>
+                                <span style={styles.itemPrice}>
+                                    ${item.price ? (item.price * (item.quantity || 1)).toFixed(2) : '-'}
+                                </span>
                             </div>
                         </div>
                     ))}
@@ -130,7 +176,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                 </div>
             </div>
 
-            {/* Pago */}
+            {/* Pago (Derecha) */}
             <div style={styles.paymentColumn}>
                 <h3 style={styles.sectionTitle}>Método de Pago</h3>
                 {errorMsg && <div style={styles.errorBox}>{errorMsg}</div>}
@@ -173,7 +219,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
 
                 {method === 'cash' && (
                     <div style={styles.cashInputSection}>
-                        <label style={styles.cashLabel}>Dinero recibido:</label>
+                        <label style={styles.cashLabel}>Dinero recibido en Caja:</label>
                         <div style={styles.inputWrapper}>
                             <span style={styles.currencySymbol}>$</span>
                             <input 
@@ -214,7 +260,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
   );
 };
 
-// Estilos (sin cambios)
+// Estilos (Se mantienen igual que en la versión anterior)
 const styles: { [key: string]: React.CSSProperties } = {
   overlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 3000, backdropFilter: 'blur(3px)' },
   modal: { backgroundColor: '#fff', width: '90%', maxWidth: '850px', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 20px 50px rgba(0,0,0,0.3)', display: 'flex', flexDirection: 'column', maxHeight: '90vh' },
@@ -223,10 +269,12 @@ const styles: { [key: string]: React.CSSProperties } = {
   title: { fontSize: '20px', fontWeight: '800', margin: 0, color: '#1a2a3a' },
   bodyContent: { display: 'flex', flex: 1, overflow: 'hidden', flexDirection: 'row' },
   summaryColumn: { flex: 1, padding: '25px', borderRight: '1px solid #eee', backgroundColor: '#F8F9FA', display: 'flex', flexDirection: 'column', overflowY: 'auto' },
-  customerInfo: { marginBottom: '20px', paddingBottom: '15px', borderBottom: '1px solid #eee' },
-  infoRow: { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px', color: '#333' },
+  customerInfo: { marginBottom: '15px', paddingBottom: '15px', borderBottom: '1px solid #eee' },
+  infoRow: { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '5px', color: '#333' },
   customerName: { fontWeight: '700', fontSize: '16px' },
-  orderLabel: { display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: '#666', marginTop: '15px' },
+  waiterInfoBox: { backgroundColor: '#fff', padding: '12px', borderRadius: '8px', border: '1px solid #e0e0e0', marginBottom: '20px', display: 'flex', flexDirection: 'column', gap: '8px' },
+  waiterRow: { display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#555' },
+  orderLabel: { display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: '#666', marginTop: '5px', marginBottom: '10px' },
   itemsList: { flex: 1, display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px', overflowY: 'auto' },
   itemRow: { display: 'flex', alignItems: 'flex-start', padding: '10px', backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #eee' },
   itemQuantity: { backgroundColor: '#E9ECEF', padding: '4px 8px', borderRadius: '6px', fontSize: '13px', fontWeight: '700', color: '#444', marginRight: '12px' },
@@ -246,7 +294,16 @@ const styles: { [key: string]: React.CSSProperties } = {
   cashLabel: { display: 'block', fontSize: '14px', fontWeight: '600', color: '#666', marginBottom: '8px' },
   inputWrapper: { display: 'flex', alignItems: 'center', backgroundColor: '#fff', border: '1px solid #ccc', borderRadius: '8px', padding: '5px 10px' },
   currencySymbol: { fontSize: '18px', fontWeight: '600', color: '#999', marginRight: '5px' },
-  cashInput: { border: 'none', fontSize: '20px', fontWeight: '700', width: '100%', outline: 'none', color: '#000000', backgroundColor: '#ffffff',colorScheme:'light' },
+  cashInput: { 
+  border: 'none', 
+  fontSize: '20px', 
+  fontWeight: '700', 
+  width: '100%', 
+  outline: 'none', 
+  color: '#000000', 
+  backgroundColor: '#ffffff',
+  colorScheme: 'light' // <--- ESTO FUERZA LAS FLECHAS A VERSE CON FONDO BLANCO
+},
   changeRow: { display: 'flex', justifyContent: 'space-between', marginTop: '15px', fontSize: '16px', fontWeight: '700', paddingTop: '10px', borderTop: '1px dashed #ccc' },
   changeAmount: { fontSize: '20px' },
   errorBox: { backgroundColor: '#ffebee', color: '#c62828', padding: '12px', borderRadius: '8px', marginBottom: '20px', fontSize: '14px', textAlign: 'center', border: '1px solid #ef9a9a' },
