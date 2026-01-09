@@ -6,11 +6,10 @@ import { TakeoutView } from '../components/TakeoutView';
 import { ProfileModal } from '../components/ProfileModal'; 
 import { NotificationsModal } from '../components/NotificationsModal';
 import { PaymentModal } from '../components/PaymentModal'; 
-import { getUserFromToken } from '../../../utils/jwtUtils';
 import { useAuth } from '../context/AuthContext'; 
 
 // Servicios
-import { getPendingOrdersService, type PendingOrder } from '../services/ordersService'; 
+import { getPendingOrdersService, getOrderDetailsListService, type PendingOrder } from '../services/ordersService';
 
 // --- Tipos ---
 type TableStatus = 'available' | 'occupied';
@@ -20,26 +19,32 @@ interface Table {
   id: number;
   name: string;
   location: string;
+  // Propiedades opcionales para el pre-cálculo
+  status?: TableStatus;
+  order?: PendingOrder;
 }
 
-// Datos fijos de tus mesas
-const FIXED_TABLES: Table[] = [
-  { id: 1, name: 'Mesa 1', location: 'Lobby' },
-  { id: 2, name: 'Mesa 2', location: 'Lobby' },
-  { id: 3, name: 'Mesa 3', location: 'Patio' },
-  { id: 4, name: 'Mesa 4', location: 'Patio' },
-  { id: 5, name: 'Mesa 5', location: 'Nueva Zona' },
-  { id: 6, name: 'Mesa 6', location: 'Nueva Zona' },
-  { id: 7, name: 'Mesa 7', location: 'Lobby' }, 
-  { id: 8, name: 'Mesa 8', location: 'Terraza' },
-  { id: 9, name: 'Mesa 9', location: 'Terraza' },
-  { id: 10, name: 'Mesa 10', location: 'Terraza' },
-  { id: 20, name: 'Mesa 20', location: 'Ejemplo Back' }, 
-];
+// --- GENERADOR AUTOMÁTICO DE MESAS (1 al 50) ---
+const FIXED_TABLES: Table[] = Array.from({ length: 50 }, (_, index) => {
+  const id = index + 1;
+  let location = 'Salón General';
+
+  if (id <= 10) location = 'Lobby';
+  else if (id <= 20) location = 'Patio';
+  else if (id <= 30) location = 'Terraza';
+  else if (id <= 40) location = 'Nueva Zona';
+  else location = 'Salón Extra'; 
+
+  return {
+    id: id,
+    name: `Mesa ${id}`,
+    location: location
+  };
+});
 
 const FILTER_CATEGORIES = ['Todas', 'Lobby', 'Nueva Zona', 'Patio', 'Terraza'];
 
-// Iconos (Sin cambios)
+// Iconos
 const SearchIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>);
 const LogoutIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>);
 const PeopleIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="#666"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>);
@@ -59,8 +64,6 @@ export const TablesPage: React.FC = () => {
   // Estados de interfaz
   const [viewMode, setViewMode] = useState<ViewMode>('tables'); 
   const [activeCategory, setActiveCategory] = useState('Todas');
-  
-  // --- NUEVO: Estado para el filtro de status ---
   const [statusFilter, setStatusFilter] = useState<'all' | 'available' | 'occupied'>('all');
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -108,16 +111,51 @@ export const TablesPage: React.FC = () => {
     return () => clearInterval(interval);
   }, [viewMode]);
 
-  const getTableStatus = (tableId: number): { status: TableStatus, order?: PendingOrder } => {
-    const order = pendingOrders.find(o => o.mesasIds && o.mesasIds.includes(tableId));
-    if (order) return { status: 'occupied', order };
-    return { status: 'available' };
-  };
-
-  const handleTableClick = (tableId: number, statusData: { status: TableStatus, order?: PendingOrder }) => {
+  // --- LOGICA DE CLICK ---
+  const handleTableClick = async (tableId: number, statusData: { status: TableStatus, order?: PendingOrder }) => {
     if (statusData.status === 'occupied' && statusData.order) {
-        setSelectedOrderToPay(statusData.order);
+        // MESA OCUPADA
+        try {
+            const baseOrder = statusData.order;
+            // Intentamos obtener los productos reales
+            const productsList = await getOrderDetailsListService(baseOrder.id);
+            
+            if (!productsList || productsList.length === 0) {
+                throw new Error("Lista vacía o sin permisos");
+            }
+
+            const fullOrder: PendingOrder = {
+                ...baseOrder,
+                detallesOrden: {
+                    comensal: baseOrder.detallesOrden?.comensal || "Cliente",
+                    orderDetailDTOs: productsList 
+                }
+            };
+            setSelectedOrderToPay(fullOrder);
+
+        } catch (error) {
+            console.warn("⚠️ No se pudieron cargar detalles. Usando modo respaldo.");
+            
+            // --- PLAN B: MODO DEMO ---
+            const totalOrden = statusData.order?.pagos[0]?.total || 0;
+            const dummyOrder: PendingOrder = {
+                ...statusData.order!, 
+                detallesOrden: {
+                    comensal: statusData.order?.detallesOrden?.comensal || "Cliente Mesa",
+                    orderDetailDTOs: [
+                        {
+                            name: "Consumo de Alimentos y Bebidas", 
+                            quantity: 1,
+                            price: totalOrden,
+                            id: 0
+                        }
+                    ]
+                }
+            };
+            setSelectedOrderToPay(dummyOrder);
+        }
     } else {
+        // MESA DISPONIBLE
         navigate('/menu'); 
     }
   };
@@ -128,24 +166,40 @@ export const TablesPage: React.FC = () => {
     fetchOrders(); 
   };
 
-  // --- LÓGICA DE FILTRADO MEJORADA ---
-  const filteredTables = FIXED_TABLES.filter(table => {
-    // 1. Calculamos el estado actual de la mesa (en tiempo real)
-    const { status } = getTableStatus(table.id);
+  // =========================================================
+  // === LÓGICA DE FILTRADO CORREGIDA (SOLUCIÓN FINAL) ===
+  // =========================================================
 
-    // 2. Filtro por Estado (Nuevo)
-    const matchesStatus = 
-        statusFilter === 'all' || 
-        status === statusFilter;
+  // 1. PASO PREVIO: Procesar el estado de las 50 mesas
+  const tablesWithStatus = FIXED_TABLES.map(table => {
+    // Buscamos si esta mesa tiene una orden pendiente en la lista
+    const order = pendingOrders.find(o => o.mesasIds && o.mesasIds.includes(table.id));
+    
+    // Determinamos el estado: Si hay orden -> 'occupied', si no -> 'available'
+    const status: TableStatus = order ? 'occupied' : 'available';
 
-    // 3. Filtro por Buscador
+    return { 
+        ...table, 
+        status, 
+        order 
+    };
+  });
+
+  // 2. FILTRADO: Ahora sí aplicamos el filtro sobre la lista procesada
+  const filteredTables = tablesWithStatus.filter(table => {
+    // A) Filtro por Estado (Ahora sí funciona porque 'status' ya está calculado)
+    if (statusFilter === 'available' && table.status !== 'available') return false;
+    if (statusFilter === 'occupied' && table.status !== 'occupied') return false;
+
+    // B) Filtro por Buscador
     const matchesSearch = table.name.toLowerCase().includes(searchTerm.toLowerCase());
 
-    // 4. Filtro por Ubicación (Categoría)
+    // C) Filtro por Ubicación (Categoría)
     const matchesCategory = activeCategory === 'Todas' || table.location === activeCategory;
 
-    return matchesSearch && matchesCategory && matchesStatus;
+    return matchesSearch && matchesCategory;
   });
+  // =========================================================
 
   return (
     <div style={styles.pageContainer}>
@@ -159,14 +213,12 @@ export const TablesPage: React.FC = () => {
             onClose={() => setSelectedOrderToPay(null)}
             onBack={() => setSelectedOrderToPay(null)}
             onConfirm={handlePaymentConfirmed}
-            // Datos básicos
             total={selectedOrderToPay.pagos[0]?.total || 0} 
             customerName={selectedOrderToPay.detallesOrden?.comensal || "Cliente Mesa"}
             customerPhone=""
             items={selectedOrderToPay.detallesOrden?.orderDetailDTOs || []} 
             orderId={selectedOrderToPay.id}
-            
-            // Datos del mesero
+            paymentId={selectedOrderToPay.pagos[0]?.id} 
             waiterName={selectedOrderToPay.pagos[0]?.mesero?.nombre} 
             receivedByWaiter={selectedOrderToPay.pagos[0]?.efectivoRecibidoMesero}
             orderDate={selectedOrderToPay.pagos[0]?.fechaHoraEntregaEfectivo}
@@ -228,41 +280,26 @@ export const TablesPage: React.FC = () => {
                         <input type="text" placeholder="Buscar mesa..." style={styles.searchInput} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                     </div>
 
-                    {/* --- NUEVO: Botones de filtro de Estado --- */}
                     <div style={styles.statusFilterContainer}>
                         <button 
-                            style={{
-                                ...styles.statusFilterBtn, 
-                                backgroundColor: statusFilter === 'all' ? '#333' : '#eee',
-                                color: statusFilter === 'all' ? '#fff' : '#666'
-                            }}
+                            style={{...styles.statusFilterBtn, backgroundColor: statusFilter === 'all' ? '#333' : '#eee', color: statusFilter === 'all' ? '#fff' : '#666'}}
                             onClick={() => setStatusFilter('all')}
                         >
                             Todas
                         </button>
                         <button 
-                            style={{
-                                ...styles.statusFilterBtn, 
-                                backgroundColor: statusFilter === 'available' ? '#1E8E3E' : '#eee',
-                                color: statusFilter === 'available' ? '#fff' : '#666'
-                            }}
+                            style={{...styles.statusFilterBtn, backgroundColor: statusFilter === 'available' ? '#1E8E3E' : '#eee', color: statusFilter === 'available' ? '#fff' : '#666'}}
                             onClick={() => setStatusFilter('available')}
                         >
                             Disponibles
                         </button>
                         <button 
-                            style={{
-                                ...styles.statusFilterBtn, 
-                                backgroundColor: statusFilter === 'occupied' ? '#FF9F43' : '#eee',
-                                color: statusFilter === 'occupied' ? '#fff' : '#666'
-                            }}
+                            style={{...styles.statusFilterBtn, backgroundColor: statusFilter === 'occupied' ? '#FF9F43' : '#eee', color: statusFilter === 'occupied' ? '#fff' : '#666'}}
                             onClick={() => setStatusFilter('occupied')}
                         >
                             Ocupadas
                         </button>
                     </div>
-                    {/* ------------------------------------------ */}
-
                 </div>
                 
                 <div style={styles.categoriesContainer}>
@@ -275,10 +312,15 @@ export const TablesPage: React.FC = () => {
             </div>
 
             <div style={styles.tablesGrid}>
+                {/* USAMOS filteredTables QUE YA CONTIENE EL STATUS CALCULADO 
+                */}
                 {filteredTables.map(table => {
-                    const { status, order } = getTableStatus(table.id);
+                    // Ya no calculamos getTableStatus aquí, usamos table.status y table.order
                     
-                    const isOccupied = status === 'occupied';
+                    // Aseguramos que status tenga un valor por defecto si viene undefined (aunque no debería)
+                    const currentStatus = table.status || 'available';
+                    const isOccupied = currentStatus === 'occupied';
+                    
                     const borderColor = isOccupied ? '#FF9F43' : '#D1E7DD';
                     const statusLabel = isOccupied ? 'OCUPADA / POR PAGAR' : 'DISPONIBLE';
                     const statusBg = isOccupied ? '#FFF5EB' : '#E6F4EA';
@@ -288,7 +330,7 @@ export const TablesPage: React.FC = () => {
                     <div 
                         key={table.id} 
                         style={{...styles.tableCard, border: `2px solid ${borderColor}`}} 
-                        onClick={() => handleTableClick(table.id, { status, order })}
+                        onClick={() => handleTableClick(table.id, { status: currentStatus, order: table.order })}
                     >
                         <div style={styles.cardHeader}>
                             <h3 style={styles.tableName}>{table.name}</h3>
@@ -300,15 +342,15 @@ export const TablesPage: React.FC = () => {
                         <div style={styles.peopleCountPill}>
                             <PeopleIcon />
                             <span style={styles.peopleCountText}>
-                                {isOccupied ? `Orden #${order?.id}` : '0 personas'}
+                                {isOccupied ? `Orden #${table.order?.id}` : '0 personas'}
                             </span>
                         </div>
                         <div style={styles.cardFooter}>
-                            {isOccupied && order ? (
+                            {isOccupied && table.order ? (
                                 <div style={{width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
                                     <span style={{fontSize: '14px', color: '#666'}}>Total:</span>
                                     <span style={{fontSize: '18px', fontWeight: '800', color: '#333'}}>
-                                        ${order.pagos[0]?.total.toFixed(2)}
+                                        ${table.order.pagos[0]?.total.toFixed(2)}
                                     </span>
                                 </div>
                             ) : (

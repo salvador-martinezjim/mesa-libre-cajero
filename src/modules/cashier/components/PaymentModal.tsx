@@ -16,7 +16,8 @@ interface PaymentModalProps {
   waiterName?: string;
   receivedByWaiter?: number;
   orderDate?: string;
-  orderId?: number; // <--- NUEVO: ID de la orden (si ya existe)
+  orderId?: number; 
+  paymentId?: number; // <--- NUEVO: ID del pago específico para el PATCH
 }
 
 // ... (ICONOS SE MANTIENEN IGUAL) ...
@@ -31,7 +32,7 @@ const MoneyHandIcon = () => <svg width="16" height="16" viewBox="0 0 24 24" fill
 
 export const PaymentModal: React.FC<PaymentModalProps> = ({ 
     isOpen, onClose, onBack, onConfirm, total, customerName, items, 
-    waiterName, receivedByWaiter, orderDate, orderId 
+    waiterName, receivedByWaiter, orderDate, orderId, paymentId // <--- AGREGADO paymentId
 }) => {
   
   const [method, setMethod] = useState<'cash' | 'card'>('cash');
@@ -78,13 +79,14 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
     setLoading(true);
 
     try {
-        // --- LÓGICA BILINGÜE ---
-        if (orderId) {
-            // CASO A: Mesa existente (Actualizamos estatus)
-            console.log(`Actualizando orden ${orderId}...`);
-            await payOrderService(orderId, method, finalCashAmount);
+        // --- LÓGICA BILINGÜE ACTUALIZADA ---
+        // Verificamos si tenemos TANTO orderId COMO paymentId (Mesa existente)
+        if (orderId && paymentId) {
+            // CASO A: Mesa existente (Usamos PATCH con paymentId)
+            console.log(`Actualizando pago ${paymentId} de orden ${orderId}...`);
+            await payOrderService(orderId, paymentId, method, finalCashAmount);
         } else {
-            // CASO B: Nuevo pedido para llevar (Creamos orden)
+            // CASO B: Nuevo pedido para llevar (Creamos orden - POST)
             console.log("Creando nueva orden...");
             await createOrderService(customerName, items, total, method, finalCashAmount);
         }
@@ -153,7 +155,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
 
                 <div style={styles.orderLabel}>
                     <ReceiptIcon />
-                    <span>Resumen de productos</span>
+                    <span>Resumen </span>
                 </div>
                 <div style={styles.itemsList}>
                     {items.map((item, index) => (
@@ -295,15 +297,15 @@ const styles: { [key: string]: React.CSSProperties } = {
   inputWrapper: { display: 'flex', alignItems: 'center', backgroundColor: '#fff', border: '1px solid #ccc', borderRadius: '8px', padding: '5px 10px' },
   currencySymbol: { fontSize: '18px', fontWeight: '600', color: '#999', marginRight: '5px' },
   cashInput: { 
-  border: 'none', 
-  fontSize: '20px', 
-  fontWeight: '700', 
-  width: '100%', 
-  outline: 'none', 
-  color: '#000000', 
-  backgroundColor: '#ffffff',
-  colorScheme: 'light' // <--- ESTO FUERZA LAS FLECHAS A VERSE CON FONDO BLANCO
-},
+    border: 'none', 
+    fontSize: '20px', 
+    fontWeight: '700', 
+    width: '100%', 
+    outline: 'none', 
+    color: '#000000', 
+    backgroundColor: '#ffffff',
+    colorScheme: 'light'
+  },
   changeRow: { display: 'flex', justifyContent: 'space-between', marginTop: '15px', fontSize: '16px', fontWeight: '700', paddingTop: '10px', borderTop: '1px dashed #ccc' },
   changeAmount: { fontSize: '20px' },
   errorBox: { backgroundColor: '#ffebee', color: '#c62828', padding: '12px', borderRadius: '8px', marginBottom: '20px', fontSize: '14px', textAlign: 'center', border: '1px solid #ef9a9a' },
