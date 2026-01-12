@@ -1,314 +1,260 @@
 import React, { useState, useEffect } from 'react';
-// Importamos AMBOS servicios
-import { createOrderService, payOrderService } from '../services/ordersService';
 
-interface PaymentModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onBack: () => void;
-  onConfirm: (method: string) => void;
-  total: number;
-  customerName: string;
-  customerPhone: string;
-  items: any[];
-  
-  // Props opcionales
-  waiterName?: string;
-  receivedByWaiter?: number;
-  orderDate?: string;
-  orderId?: number; 
-  paymentId?: number; // <--- NUEVO: ID del pago específico para el PATCH
+// --- ICONOS ---
+const CashIcon = () => (<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01M18 12h.01"/></svg>);
+const CardIcon = () => (<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>);
+const ArrowLeftIcon = () => (<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>);
+
+// --- INTERFACES ---
+interface OrderItem {
+    name: string;
+    quantity: number;
+    price: number;
+    id: number;
 }
 
-// ... (ICONOS SE MANTIENEN IGUAL) ...
-const ArrowLeft = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#333" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>;
-const CashIcon = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"></rect><circle cx="12" cy="12" r="2"></circle><path d="M6 12h.01M18 12h.01"></path></svg>;
-const CardIcon = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line></svg>;
-const ReceiptIcon = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>;
-const UserIcon = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>;
-const WaiterIcon = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>;
-const CalendarIcon = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>;
-const MoneyHandIcon = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1E8E3E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>;
+interface PaymentModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    onBack: () => void;
+    onConfirm: (method: string) => void;
+    total: number;
+    clientLabelText?: string;
+    customerName?: string;
+    items?: OrderItem[]; // Lista de productos (Crucial para Takeout)
+    orderId?: number;
+    waiterName?: string;
+    receivedByWaiter?: number;
+    paymentMethod?: string; // Método pre-definido (Crucial para Mesa)
+    isTakeout?: boolean;    // <--- LA BANDERA MAESTRA
+}
 
-export const PaymentModal: React.FC<PaymentModalProps> = ({ 
-    isOpen, onClose, onBack, onConfirm, total, customerName, items, 
-    waiterName, receivedByWaiter, orderDate, orderId, paymentId // <--- AGREGADO paymentId
+export const PaymentModal: React.FC<PaymentModalProps> = ({
+    isOpen,
+    onClose,
+    onBack,
+    onConfirm,
+    total,
+    clientLabelText = "CLIENTE",
+    customerName = "Cliente General",
+    items = [],
+    orderId,
+    waiterName,
+    receivedByWaiter = 0,
+    paymentMethod = "Efectivo",
+    isTakeout = false // ⚠️ POR DEFECTO ES MESA (FALSE)
 }) => {
-  
-  const [method, setMethod] = useState<'cash' | 'card'>('cash');
-  const [loading, setLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [cashReceivedStr, setCashReceivedStr] = useState('');
-  const [change, setChange] = useState(0);
-
-  const formattedDate = orderDate ? new Date(orderDate).toLocaleString('es-MX', {
-      day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
-  }) : '';
-
-  useEffect(() => {
-    if (isOpen) {
-        setCashReceivedStr('');
-        setChange(0);
-        setErrorMsg(null);
-        setMethod('cash');
-    }
-  }, [isOpen, total]);
-
-  useEffect(() => {
-    if (method === 'cash' && cashReceivedStr) {
-        const received = parseFloat(cashReceivedStr);
-        if (!isNaN(received)) setChange(received - total);
-        else setChange(0);
-    } else {
-        setChange(0);
-    }
-  }, [cashReceivedStr, total, method]);
-
-  const handleConfirmPayment = async () => {
-    setErrorMsg(null);
-    let finalCashAmount = 0;
     
-    if (method === 'cash') {
-        finalCashAmount = parseFloat(cashReceivedStr);
-        if (isNaN(finalCashAmount) || finalCashAmount < total) {
-            setErrorMsg("❌ El monto recibido es menor al total.");
-            return;
+    // LÓGICA DE INICIO:
+    // Si es Takeout -> Inicia siempre en 'Efectivo' pero permite cambiar.
+    // Si es Mesa    -> Inicia en lo que diga 'paymentMethod' (ej. Tarjeta) y se bloquea.
+    const [selectedMethod, setSelectedMethod] = useState<string>(isTakeout ? 'Efectivo' : paymentMethod);
+    
+    // Verificamos si la selección actual es efectivo
+    const isCash = selectedMethod === 'Efectivo';
+
+    // Estado para calcular cambio
+    const [amountReceived, setAmountReceived] = useState<string>('');
+    const change = amountReceived ? parseFloat(amountReceived) - total : 0;
+
+    // Efecto para resetear cuando se abre el modal
+    useEffect(() => {
+        if (isOpen) {
+            setAmountReceived('');
+            // Reiniciamos la lógica de selección al abrir
+            setSelectedMethod(isTakeout ? 'Efectivo' : paymentMethod);
         }
-    }
+    }, [isOpen, paymentMethod, isTakeout]);
 
-    setLoading(true);
+    if (!isOpen) return null;
 
-    try {
-        // --- LÓGICA BILINGÜE ACTUALIZADA ---
-        // Verificamos si tenemos TANTO orderId COMO paymentId (Mesa existente)
-        if (orderId && paymentId) {
-            // CASO A: Mesa existente (Usamos PATCH con paymentId)
-            console.log(`Actualizando pago ${paymentId} de orden ${orderId}...`);
-            await payOrderService(orderId, paymentId, method, finalCashAmount);
-        } else {
-            // CASO B: Nuevo pedido para llevar (Creamos orden - POST)
-            console.log("Creando nueva orden...");
-            await createOrderService(customerName, items, total, method, finalCashAmount);
-        }
-        
-        alert(`✅ ¡Cobro exitoso!\n\n${method === 'cash' ? `Cambio a devolver: $${change.toFixed(2)}` : ''}`);
-        onConfirm(method === 'cash' ? 'Efectivo' : 'Tarjeta'); 
-
-    } catch (error: any) {
-        console.error("Error en pago:", error);
-        if (error.response && error.response.data && error.response.data.message) {
-            setErrorMsg(`Error: ${error.response.data.message}`);
-        } else {
-            setErrorMsg("Ocurrió un error al procesar el pedido.");
-        }
-    } finally {
-        setLoading(false);
-    }
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <div style={styles.overlay}>
-      <div style={styles.modal}>
-        {/* Header */}
-        <div style={styles.header}>
-          <button onClick={onBack} style={styles.backBtn} disabled={loading}>
-            <ArrowLeft />
-            <span style={{marginLeft: 5, fontWeight: 600}}>Volver</span>
-          </button>
-          <h2 style={styles.title}>Confirmar Pago</h2>
-          <div style={{width: 60}}></div> 
-        </div>
-
-        <div style={styles.bodyContent}>
-            {/* Resumen (Izquierda) */}
-            <div style={styles.summaryColumn}>
-                <div style={styles.customerInfo}>
-                    <div style={styles.infoRow}>
-                        <UserIcon />
-                        <span style={styles.customerName}>{customerName || "Cliente Mostrador"}</span>
-                    </div>
+    return (
+        <div style={styles.overlay}>
+            <div style={styles.container}>
+                {/* HEADER */}
+                <div style={styles.header}>
+                    <button onClick={onBack} style={styles.backButton}>
+                        <ArrowLeftIcon /> <span style={{marginLeft: 5}}>Volver</span>
+                    </button>
+                    {/* El título cambia según la bandera */}
+                    <h2 style={styles.title}>{isTakeout ? 'Cobrar Para Llevar' : 'Confirmar Pago Mesa'}</h2>
+                    <div style={{width: 80}}></div> 
                 </div>
 
-                {/* Info del Mesero */}
-                {waiterName && (
-                    <div style={styles.waiterInfoBox}>
-                        <div style={styles.waiterRow}>
-                            <WaiterIcon />
-                            <span>Atendió: <strong>{waiterName}</strong></span>
+                <div style={styles.content}>
+                    {/* --- COLUMNA IZQUIERDA (INFORMACIÓN) --- */}
+                    <div style={styles.leftColumn}>
+                        <div style={styles.infoGroup}>
+                            <p style={styles.label}>{clientLabelText}</p>
+                            <h3 style={styles.customerName}>👤 {customerName}</h3>
                         </div>
-                        {orderDate && (
-                            <div style={styles.waiterRow}>
-                                <CalendarIcon />
-                                <span>{formattedDate}</span>
-                            </div>
-                        )}
-                        {receivedByWaiter !== undefined && (
-                            <div style={styles.waiterRow}>
-                                <MoneyHandIcon />
-                                <span>Recibido por mesero: <strong style={{color: '#1E8E3E'}}>${receivedByWaiter.toFixed(2)}</strong></span>
-                            </div>
-                        )}
-                    </div>
-                )}
 
-                <div style={styles.orderLabel}>
-                    <ReceiptIcon />
-                    <span>Resumen </span>
-                </div>
-                <div style={styles.itemsList}>
-                    {items.map((item, index) => (
-                        <div key={index} style={styles.itemRow}>
-                            <div style={styles.itemQuantity}>{item.quantity || 1}x</div>
-                            <div style={styles.itemDetails}>
-                                <span style={styles.itemName}>{item.name || item.productoId}</span>
-                                <span style={styles.itemPrice}>
-                                    ${item.price ? (item.price * (item.quantity || 1)).toFixed(2) : '-'}
+                        {/* AQUÍ ESTÁ LA MAGIA DUAL */}
+                        {isTakeout ? (
+                            // CASO A: PARA LLEVAR (Muestra lista de productos)
+                            <div style={styles.productsListContainer}>
+                                <p style={styles.label}>RESUMEN DE ORDEN</p>
+                                {items.length > 0 ? (
+                                    <div style={styles.productsList}>
+                                        {items.map((item, idx) => (
+                                            <div key={idx} style={styles.productRow}>
+                                                <span style={styles.prodQty}>{item.quantity}x</span>
+                                                <span style={styles.prodName}>{item.name}</span>
+                                                <span style={styles.prodPrice}>${(item.price * item.quantity).toFixed(2)}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p style={{color: '#999', fontStyle: 'italic', fontSize: '14px'}}>
+                                        No hay productos cargados en esta vista.
+                                    </p>
+                                )}
+                            </div>
+                        ) : (
+                            // CASO B: MESA (Muestra tarjeta del mesero)
+                            <div style={styles.waiterCard}>
+                                <p style={{margin: '0 0 5px 0', fontSize: '13px', color: '#666'}}>
+                                    👤 Atendió: <b>{waiterName || 'Mesero'}</b>
+                                </p>
+                                <p style={{margin: '0', fontSize: '13px', color: '#1E8E3E', fontWeight: '600'}}>
+                                    💲 Recibido por mesero: ${receivedByWaiter?.toFixed(2)}
+                                </p>
+                                {orderId && <p style={{marginTop: 10, fontSize: 12, color: '#999'}}>Orden #{orderId}</p>}
+                            </div>
+                        )}
+
+                        <div style={styles.divider}></div>
+                        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto'}}>
+                            <h3 style={styles.totalLabel}>Total a Pagar:</h3>
+                            <h3 style={styles.totalAmount}>${total.toFixed(2)}</h3>
+                        </div>
+                    </div>
+
+                    {/* --- COLUMNA DERECHA (PAGO) --- */}
+                    <div style={styles.rightColumn}>
+                        <h4 style={styles.sectionTitle}>Método de Pago</h4>
+                        
+                        {isTakeout ? (
+                            // CASO A: PARA LLEVAR (Botones seleccionables)
+                            <div style={styles.methodSelectionRow}>
+                                <button 
+                                    style={{...styles.methodSelectBtn, ...(selectedMethod === 'Efectivo' ? styles.methodActive : {})}}
+                                    onClick={() => setSelectedMethod('Efectivo')}
+                                >
+                                    <CashIcon /> <span>Efectivo</span>
+                                </button>
+                                <button 
+                                    style={{...styles.methodSelectBtn, ...(selectedMethod === 'Tarjeta' ? styles.methodActive : {})}}
+                                    onClick={() => setSelectedMethod('Tarjeta')}
+                                >
+                                    <CardIcon /> <span>Tarjeta</span>
+                                </button>
+                            </div>
+                        ) : (
+                            // CASO B: MESA (Tarjeta bloqueada informativa)
+                            <div style={{...styles.methodCardLocked, borderColor: isCash ? '#FF9F43' : '#333', backgroundColor: isCash ? '#FFF5EB' : '#F8F9FA'}}>
+                                <div style={{color: isCash ? '#FF9F43' : '#333'}}>{isCash ? <CashIcon /> : <CardIcon />}</div>
+                                <span style={{...styles.methodTextLocked, color: isCash ? '#FF9F43' : '#333'}}>
+                                    {paymentMethod} (Definido por Mesero)
                                 </span>
                             </div>
-                        </div>
-                    ))}
-                </div>
-                <div style={styles.totalSection}>
-                    <div style={styles.totalRow}>
-                        <span>Total a Pagar:</span>
-                        <span style={styles.totalAmount}>${total.toFixed(2)}</span>
+                        )}
+
+                        {/* INPUT DE CAMBIO (Solo visible si es Efectivo) */}
+                        {isCash ? (
+                            <div style={styles.cashSection}>
+                                <label style={styles.inputLabel}>Dinero recibido:</label>
+                                <div style={styles.inputWrapper}>
+                                    <span style={styles.currencySymbol}>$</span>
+                                    <input 
+                                        type="number" 
+                                        value={amountReceived}
+                                        onChange={(e) => setAmountReceived(e.target.value)}
+                                        placeholder="0.00"
+                                        style={styles.input}
+                                        autoFocus
+                                    />
+                                </div>
+                                <div style={styles.changeRow}>
+                                    <span style={styles.changeLabel}>Cambio:</span>
+                                    <span style={{...styles.changeAmount, color: change < 0 ? '#dc3545' : '#1E8E3E'}}>
+                                        ${change >= 0 ? change.toFixed(2) : '0.00'}
+                                    </span>
+                                </div>
+                            </div>
+                        ) : (
+                             <div style={styles.cardMessage}>
+                                <p>✅ Procesar cobro con <b>Tarjeta</b>.</p>
+                            </div>
+                        )}
+
+                        <button 
+                            style={styles.confirmButton}
+                            onClick={() => onConfirm(selectedMethod)}
+                            disabled={isCash && change < 0}
+                        >
+                            Cobrar ${total.toFixed(2)}
+                        </button>
                     </div>
-                </div>
-            </div>
-
-            {/* Pago (Derecha) */}
-            <div style={styles.paymentColumn}>
-                <h3 style={styles.sectionTitle}>Método de Pago</h3>
-                {errorMsg && <div style={styles.errorBox}>{errorMsg}</div>}
-
-                <div style={styles.methodsGrid}>
-                    <button 
-                        style={{
-                            ...styles.methodCard,
-                            borderColor: method === 'cash' ? '#FF9F43' : '#eee',
-                            backgroundColor: method === 'cash' ? '#FFF5EB' : '#fff'
-                        }}
-                        onClick={() => setMethod('cash')}
-                        disabled={loading}
-                    >
-                        <div style={{...styles.iconBox, color: method === 'cash' ? '#FF9F43' : '#333'}}>
-                            <CashIcon />
-                        </div>
-                        <span style={{...styles.methodName, color: method === 'cash' ? '#FF9F43' : '#333'}}>
-                            Efectivo
-                        </span>
-                    </button>
-
-                    <button 
-                        style={{
-                            ...styles.methodCard,
-                            borderColor: method === 'card' ? '#FF9F43' : '#eee',
-                            backgroundColor: method === 'card' ? '#FFF5EB' : '#fff'
-                        }}
-                        onClick={() => setMethod('card')}
-                        disabled={loading}
-                    >
-                        <div style={{...styles.iconBox, color: method === 'card' ? '#FF9F43' : '#333'}}>
-                            <CardIcon />
-                        </div>
-                        <span style={{...styles.methodName, color: method === 'card' ? '#FF9F43' : '#333'}}>
-                            Tarjeta
-                        </span>
-                    </button>
-                </div>
-
-                {method === 'cash' && (
-                    <div style={styles.cashInputSection}>
-                        <label style={styles.cashLabel}>Dinero recibido en Caja:</label>
-                        <div style={styles.inputWrapper}>
-                            <span style={styles.currencySymbol}>$</span>
-                            <input 
-                                type="number" 
-                                placeholder="0.00" 
-                                style={styles.cashInput}
-                                value={cashReceivedStr}
-                                onChange={(e) => setCashReceivedStr(e.target.value)}
-                                autoFocus
-                            />
-                        </div>
-                        <div style={{...styles.changeRow, color: change < 0 ? '#FF4C4C' : '#1E8E3E'}}>
-                            <span>Cambio:</span>
-                            <span style={styles.changeAmount}>
-                                {change < 0 ? 'Falta dinero' : `$${change.toFixed(2)}`}
-                            </span>
-                        </div>
-                    </div>
-                )}
-
-                <div style={styles.paymentActions}>
-                    <button 
-                        style={{
-                            ...styles.confirmBtn,
-                            opacity: (loading || (method === 'cash' && change < 0)) ? 0.5 : 1,
-                            cursor: (loading || (method === 'cash' && change < 0)) ? 'not-allowed' : 'pointer'
-                        }} 
-                        onClick={handleConfirmPayment}
-                        disabled={loading || (method === 'cash' && change < 0)}
-                    >
-                        {loading ? 'Procesando...' : `Cobrar $${total.toFixed(2)}`}
-                    </button>
                 </div>
             </div>
         </div>
-      </div>
-    </div>
-  );
+    );
 };
 
-// Estilos (Se mantienen igual que en la versión anterior)
+// --- ESTILOS ---
 const styles: { [key: string]: React.CSSProperties } = {
-  overlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 3000, backdropFilter: 'blur(3px)' },
-  modal: { backgroundColor: '#fff', width: '90%', maxWidth: '850px', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 20px 50px rgba(0,0,0,0.3)', display: 'flex', flexDirection: 'column', maxHeight: '90vh' },
-  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 25px', borderBottom: '1px solid #eee', backgroundColor: '#fff' },
-  backBtn: { background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', color: '#666', padding: 0 },
-  title: { fontSize: '20px', fontWeight: '800', margin: 0, color: '#1a2a3a' },
-  bodyContent: { display: 'flex', flex: 1, overflow: 'hidden', flexDirection: 'row' },
-  summaryColumn: { flex: 1, padding: '25px', borderRight: '1px solid #eee', backgroundColor: '#F8F9FA', display: 'flex', flexDirection: 'column', overflowY: 'auto' },
-  customerInfo: { marginBottom: '15px', paddingBottom: '15px', borderBottom: '1px solid #eee' },
-  infoRow: { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '5px', color: '#333' },
-  customerName: { fontWeight: '700', fontSize: '16px' },
-  waiterInfoBox: { backgroundColor: '#fff', padding: '12px', borderRadius: '8px', border: '1px solid #e0e0e0', marginBottom: '20px', display: 'flex', flexDirection: 'column', gap: '8px' },
-  waiterRow: { display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#555' },
-  orderLabel: { display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: '#666', marginTop: '5px', marginBottom: '10px' },
-  itemsList: { flex: 1, display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px', overflowY: 'auto' },
-  itemRow: { display: 'flex', alignItems: 'flex-start', padding: '10px', backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #eee' },
-  itemQuantity: { backgroundColor: '#E9ECEF', padding: '4px 8px', borderRadius: '6px', fontSize: '13px', fontWeight: '700', color: '#444', marginRight: '12px' },
-  itemDetails: { flex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-  itemName: { fontSize: '14px', fontWeight: '500', color: '#333' },
-  itemPrice: { fontSize: '14px', fontWeight: '700', color: '#1a2a3a' },
-  totalSection: { marginTop: 'auto', paddingTop: '20px', borderTop: '2px dashed #ddd' },
-  totalRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '18px', fontWeight: '800', color: '#1a2a3a' },
-  totalAmount: { fontSize: '24px', color: '#FF9F43' },
-  paymentColumn: { flex: 0.8, padding: '30px', display: 'flex', flexDirection: 'column', backgroundColor: '#fff' },
-  sectionTitle: { margin: '0 0 20px 0', fontSize: '16px', fontWeight: '700', color: '#333' },
-  methodsGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '20px' },
-  methodCard: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px', borderRadius: '12px', border: '2px solid #eee', cursor: 'pointer', transition: 'all 0.2s', height: '110px' },
-  iconBox: { marginBottom: '10px', transform: 'scale(1.2)' },
-  methodName: { fontWeight: '700', fontSize: '15px' },
-  cashInputSection: { backgroundColor: '#F8F9FA', padding: '15px', borderRadius: '12px', marginBottom: '10px', border: '1px solid #E0E0E0' },
-  cashLabel: { display: 'block', fontSize: '14px', fontWeight: '600', color: '#666', marginBottom: '8px' },
-  inputWrapper: { display: 'flex', alignItems: 'center', backgroundColor: '#fff', border: '1px solid #ccc', borderRadius: '8px', padding: '5px 10px' },
-  currencySymbol: { fontSize: '18px', fontWeight: '600', color: '#999', marginRight: '5px' },
-  cashInput: { 
-    border: 'none', 
-    fontSize: '20px', 
-    fontWeight: '700', 
-    width: '100%', 
-    outline: 'none', 
-    color: '#000000', 
-    backgroundColor: '#ffffff',
-    colorScheme: 'light'
-  },
-  changeRow: { display: 'flex', justifyContent: 'space-between', marginTop: '15px', fontSize: '16px', fontWeight: '700', paddingTop: '10px', borderTop: '1px dashed #ccc' },
-  changeAmount: { fontSize: '20px' },
-  errorBox: { backgroundColor: '#ffebee', color: '#c62828', padding: '12px', borderRadius: '8px', marginBottom: '20px', fontSize: '14px', textAlign: 'center', border: '1px solid #ef9a9a' },
-  paymentActions: { marginTop: 'auto' },
-  confirmBtn: { width: '100%', padding: '18px', backgroundColor: '#FF9F43', color: '#fff', border: 'none', borderRadius: '12px', fontSize: '18px', fontWeight: '700', cursor: 'pointer', boxShadow: '0 4px 15px rgba(255, 159, 67, 0.4)', transition: 'all 0.2s' }
+    overlay: { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 2000, backdropFilter: 'blur(5px)' },
+    container: { backgroundColor: '#fff', borderRadius: '20px', width: '900px', maxWidth: '95%', height: '600px', maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', overflow: 'hidden' },
+    header: { padding: '20px 30px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#fff', zIndex: 10 },
+    title: { margin: 0, fontSize: '20px', fontWeight: '800', color: '#111' },
+    backButton: { background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px', color: '#666', display: 'flex', alignItems: 'center' },
+    content: { display: 'flex', flex: 1, overflow: 'hidden' },
+    
+    // IZQUIERDA
+    leftColumn: { flex: 1, padding: '40px', backgroundColor: '#FAFAFA', borderRight: '1px solid #eee', display: 'flex', flexDirection: 'column', overflowY: 'auto' },
+    infoGroup: { marginBottom: '20px' },
+    label: { fontSize: '11px', color: '#999', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px', fontWeight: '700' },
+    customerName: { margin: 0, fontSize: '22px', color: '#333' },
+    
+    waiterCard: { backgroundColor: '#fff', padding: '15px', borderRadius: '12px', border: '1px solid #e0e0e0', marginBottom: 'auto' },
+    
+    // Lista de productos (Takeout)
+    productsListContainer: { flex: 1, overflowY: 'auto', marginBottom: '20px', paddingRight: '5px' },
+    productsList: { display: 'flex', flexDirection: 'column', gap: '8px' },
+    productRow: { display: 'flex', justifyContent: 'space-between', fontSize: '14px', borderBottom: '1px dashed #e0e0e0', paddingBottom: '8px' },
+    prodQty: { fontWeight: '700', color: '#FF9F43', width: '30px' },
+    prodName: { flex: 1, color: '#444' },
+    prodPrice: { fontWeight: '600', color: '#333' },
+
+    divider: { height: '1px', backgroundColor: '#e0e0e0', margin: '20px 0' },
+    totalLabel: { fontSize: '18px', fontWeight: '700', color: '#333' },
+    totalAmount: { fontSize: '28px', fontWeight: '800', color: '#FF9F43' },
+
+    // DERECHA
+    rightColumn: { flex: 1.2, padding: '40px', display: 'flex', flexDirection: 'column', justifyContent: 'center', backgroundColor: '#fff' },
+    sectionTitle: { margin: '0 0 20px 0', fontSize: '16px', fontWeight: '600', color: '#333' },
+
+    // Selectores Takeout
+    methodSelectionRow: { display: 'flex', gap: '15px', marginBottom: '30px' },
+    methodSelectBtn: { flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '15px', border: '1px solid #ddd', borderRadius: '12px', backgroundColor: '#fff', cursor: 'pointer', color: '#666', gap: '10px', transition: 'all 0.2s' },
+    methodActive: { borderColor: '#FF9F43', backgroundColor: '#FFF5EB', color: '#FF9F43', fontWeight: 'bold', boxShadow: '0 4px 10px rgba(255,159,67,0.2)' },
+
+    // Tarjeta Bloqueada (Mesa)
+    methodCardLocked: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '25px', borderRadius: '16px', border: '2px solid', marginBottom: '30px', width: '100%', boxSizing: 'border-box', cursor: 'default' },
+    methodTextLocked: { marginTop: '10px', fontWeight: '700', fontSize: '16px' },
+
+    // Inputs Efectivo
+    cashSection: { backgroundColor: '#F8F9FA', padding: '20px', borderRadius: '12px', border: '1px solid #eee', marginBottom: '20px' },
+    inputLabel: { display: 'block', marginBottom: '10px', color: '#666', fontSize: '14px' },
+    inputWrapper: { display: 'flex', alignItems: 'center', backgroundColor: '#fff', border: '1px solid #ddd', borderRadius: '8px', padding: '0 15px', marginBottom: '15px' },
+    currencySymbol: { fontSize: '20px', color: '#999', marginRight: '10px' },
+    input: { width: '100%', border: 'none', fontSize: '24px', fontWeight: '600', color: '#333', padding: '10px 0', outline: 'none' },
+    changeRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '15px', borderTop: '1px dashed #ddd' },
+    changeLabel: { fontWeight: '600', color: '#333' },
+    changeAmount: { fontSize: '20px', fontWeight: '800' },
+
+    cardMessage: { textAlign: 'center', padding: '20px', backgroundColor: '#F0F7FF', borderRadius: '12px', color: '#0056b3', marginBottom: '20px' },
+
+    confirmButton: { width: '100%', padding: '18px', backgroundColor: '#FF9F43', color: '#fff', border: 'none', borderRadius: '12px', fontSize: '18px', fontWeight: '700', cursor: 'pointer', marginTop: 'auto', boxShadow: '0 4px 15px rgba(255, 159, 67, 0.3)', transition: 'transform 0.1s' },
 };

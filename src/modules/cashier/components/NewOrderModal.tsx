@@ -32,6 +32,7 @@ const TrashIcon = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="no
 const PlusSmall = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#333" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>;
 const MinusSmall = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#333" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg>;
 const CheckIcon = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>;
+const NoteIcon = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>;
 
 export const NewOrderModal: React.FC<NewOrderModalProps> = ({ isOpen, onClose, onOrderCreated }) => {
   const [customerName, setCustomerName] = useState('');
@@ -44,48 +45,43 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({ isOpen, onClose, o
   const [cart, setCart] = useState<CartItem[]>([]);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
 
+  // --- NUEVO ESTADO PARA LA NOTA ---
+  const [orderNote, setOrderNote] = useState(''); 
+
   useEffect(() => {
     if (isOpen) {
       setCustomerName('');
       setCart([]);
       setActiveCategory('Todas');
       setShowPaymentModal(false);
+      setOrderNote(''); // Reseteamos la nota al abrir
       setIsLoading(true);
       
       const fetchData = async () => {
         try {
-            // Pedimos TODO al mismo tiempo
             const [categoriesData, productsData] = await Promise.all([
                 getCategoriesService(),
                 getProductsAndCategoriesService()
             ]);
 
-            // 1. MAPA MAESTRO DE CATEGORÍAS (ID -> Nombre)
-            // Usamos categoriesData (/categories) porque es la lista COMPLETA y real
             const masterCategoryMap: Record<number, string> = {};
             const tabsList: string[] = [];
 
             if (Array.isArray(categoriesData)) {
                 categoriesData.forEach((cat: any) => {
-                    // Guardamos: ID 6 -> "Sopas"
                     masterCategoryMap[cat.id] = cat.nombre; 
                     tabsList.push(cat.nombre);
                 });
             }
 
-            // Configuramos las pestañas
             const uniqueTabs = Array.from(new Set(tabsList));
             setCategories(['Todas', ...uniqueTabs]);
 
-            // 2. PROCESAR PRODUCTOS
-            // Ahora asignamos el nombre de la categoría al producto usando el Mapa Maestro
             if (productsData.productos && Array.isArray(productsData.productos)) {
                 const mappedProducts: Product[] = productsData.productos.map((p: any) => ({
                     id: p.id,
                     name: p.nombre,
                     price: p.precio,
-                    // AQUÍ ESTABA EL ERROR ANTES:
-                    // Ahora buscamos el categoryId (ej: 6) en el mapa maestro que creamos arriba
                     category: masterCategoryMap[p.categoryId] || 'Otros', 
                     image: p.imagen || PLACEHOLDER_IMG
                 }));
@@ -106,7 +102,6 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({ isOpen, onClose, o
 
   const filteredProducts = useMemo(() => {
     if (activeCategory === 'Todas') return products;
-    // Ahora sí coincidirán perfectamente "Sopas" === "Sopas"
     return products.filter(p => p.category === activeCategory);
   }, [activeCategory, products]);
 
@@ -158,14 +153,11 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({ isOpen, onClose, o
   };
 
   const handlePaymentSuccess = (methodUsed: string) => { 
-    // ^^^ Recibimos el string desde PaymentModal (ej: "Efectivo")
-    
     console.log("Pago exitoso con:", methodUsed);
     
-    // Creamos la orden con el dato pegado
     const newOrder = {
         ...createOrderObject(true),
-        paymentMethod: methodUsed // <--- AQUÍ GUARDAMOS EL DATO PARA EL DETALLE
+        paymentMethod: methodUsed 
     };
     
     onOrderCreated(newOrder); 
@@ -278,7 +270,27 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({ isOpen, onClose, o
                 ))}
                 </div>
             )}
+            
             <div style={styles.divider}></div>
+
+            {/* --- SECCIÓN DE NOTAS (NUEVO) --- */}
+            <div style={styles.noteSection}>
+                <div style={styles.noteHeader}>
+                    <NoteIcon />
+                    <span style={styles.noteLabel}>Notas para Cocina (Opcional):</span>
+                </div>
+                <textarea
+                    placeholder="Ej. Sin cebolla, Salsa aparte, Bien cocido..."
+                    style={styles.noteInput}
+                    value={orderNote}
+                    onChange={(e) => setOrderNote(e.target.value)}
+                    rows={2}
+                />
+            </div>
+            {/* ---------------------------------- */}
+
+            <div style={styles.divider}></div>
+
             <div style={styles.totalRow}>
                 <span>Subtotal:</span>
                 <span>${total.toFixed(2)}</span>
@@ -305,6 +317,10 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({ isOpen, onClose, o
           </div>
         </div>
       </div>
+
+      {/* AQUÍ PASAMOS LA NOTA AL MODAL DE PAGO 
+          (Pero primero necesitas actualizar PaymentModal para recibir este prop) 
+      */}
       <PaymentModal 
         isOpen={showPaymentModal}
         onClose={onClose} 
@@ -312,14 +328,14 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({ isOpen, onClose, o
         onConfirm={handlePaymentSuccess}
         total={total}
         customerName={customerName}
-        customerPhone={''} 
         items={cart}
+        orderNote={orderNote} 
       />
     </div>
   );
 };
 
-// Estilos (sin cambios)
+// Estilos
 const styles: { [key: string]: React.CSSProperties } = {
   overlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 2000, backdropFilter: 'blur(2px)' },
   modalContainer: { backgroundColor: '#F8F9FA', width: '90%', maxWidth: '650px', height: '90vh', borderRadius: '16px', display: 'flex', flexDirection: 'column', boxShadow: '0 10px 40px rgba(0,0,0,0.2)', overflow: 'hidden' },
@@ -351,6 +367,13 @@ const styles: { [key: string]: React.CSSProperties } = {
   qtyText: { fontSize: '15px', fontWeight: '700', color: '#000000', minWidth: '24px', textAlign: 'center', margin: '0 2px' },
   deleteBtn: { background: 'none', border: 'none', cursor: 'pointer', padding: '5px' },
   divider: { height: '1px', backgroundColor: '#eee', margin: '15px 0' },
+  
+  // ESTILOS DE LA NOTA
+  noteSection: { marginBottom: '15px' },
+  noteHeader: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' },
+  noteLabel: { fontSize: '13px', fontWeight: '600', color: '#666' },
+  noteInput: { width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '14px', outline: 'none', backgroundColor: '#FAFAFA', fontFamily: 'inherit', resize: 'none', boxSizing: 'border-box',color:'black' },
+
   totalRow: { display: 'flex', justifyContent: 'space-between', marginBottom: '10px', fontSize: '14px', color: '#666' },
   totalRowLarge: { display: 'flex', justifyContent: 'space-between', marginBottom: '25px', fontSize: '18px', fontWeight: '800', color: '#1a2a3a' },
   actionsFooter: { display: 'flex', gap: '15px', marginTop: '10px' },

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import logoPng from '../../../assets/logo_color.png'; 
+import logoPng from '../../../assets/Logo_MesaLibreNuevo.png'; 
 // 1. IMPORTAMOS AMBOS SERVICIOS
 import { loginService, forgotPasswordService } from '../services/authService';
 import { useAuth } from '../context/AuthContext';

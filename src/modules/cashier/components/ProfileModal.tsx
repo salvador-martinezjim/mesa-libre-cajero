@@ -1,210 +1,164 @@
-import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useRef, useState,type ChangeEvent } from 'react';
 
 interface ProfileModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  user: {
-    name: string;
-    role: string;
-    email: string;
-    avatarUrl: string;
-  };
+    isOpen: boolean;
+    onClose: () => void;
+    user: {
+        name: string;
+        role: string;
+        email: string;
+        avatarUrl: string;
+    };
+    onAvatarUpdate: (newUrl: string) => void; 
 }
 
-// Iconos internos
-const CameraIcon = () => (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
-);
-const LockIcon = () => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-);
-const MoonIcon = () => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
-);
-const GlobeIcon = () => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
-);
-const ChevronRight = () => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
-);
+// Iconos
+const CloseIcon = () => (<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>);
+const CameraIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>);
+const UserIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FF9F43" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>);
+const MailIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FF9F43" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>);
+const BadgeIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FF9F43" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"/></svg>);
 
-export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, user }) => {
-  const navigate = useNavigate();
+export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, user, onAvatarUpdate }) => {
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+    const [isUploading, setIsUploading] = useState(false);
 
-  if (!isOpen) return null;
+    if (!isOpen) return null;
 
-  return (
-    <>
-      <div style={styles.overlay} onClick={onClose} />
-      <div style={styles.modal}>
-        
-        {/* Header Naranja con Avatar */}
-        <div style={styles.header}>
-            <div style={styles.avatarContainer}>
-                <img src={user.avatarUrl} alt="Profile" style={styles.avatarImage} />
-                <button style={styles.cameraButton}><CameraIcon /></button>
-            </div>
-            <div style={styles.userInfo}>
-                <h3 style={styles.userName}>{user.name}</h3>
-                <p style={styles.userRole}>{user.role}</p>
-                <p style={styles.userEmail}>{user.email}</p>
-            </div>
-        </div>
+    const handleImageClick = () => {
+        fileInputRef.current?.click();
+    };
 
-        {/* Lista de Opciones */}
-        <div style={styles.optionsList}>
+    const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (file) {
+            setSelectedFile(file);
+            const objectUrl = URL.createObjectURL(file);
+            setPreviewUrl(objectUrl);
+        }
+    };
+
+    // --- GUARDADO PERSISTENTE ---
+    const handleSaveAvatar = () => {
+        if (!selectedFile) return;
+
+        setIsUploading(true);
+
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            const base64String = reader.result as string;
             
-            {/* OPCIÓN 1: CAMBIAR CONTRASEÑA (CON NAVEGACIÓN) */}
-            <div 
-                style={styles.optionItem} 
-                onClick={() => {
-                    onClose(); // Cerramos el modal primero
-                    navigate('/change-password'); // Navegamos a la nueva página
-                }}
-            >
-                <div style={styles.optionIcon}><LockIcon /></div>
-                <div style={styles.optionContent}>
-                    <span style={styles.optionTitle}>Cambiar contraseña</span>
-                    <span style={styles.optionSubtitle}>Actualiza tu seguridad</span>
-                </div>
-                <ChevronRight />
-            </div>
+            // 1. Guardamos la imagen asociada AL CORREO DEL USUARIO
+            // Esto evita que se borre o se mezcle si entra otro usuario
+            if (user.email) {
+                const storageKey = `avatar_${user.email}`; 
+                localStorage.setItem(storageKey, base64String);
+                console.log(`Foto guardada localmente para: ${storageKey}`);
+            }
 
-            <div style={styles.optionItem}>
-                <div style={styles.optionIcon}><MoonIcon /></div>
-                <div style={styles.optionContent}>
-                    <span style={styles.optionTitle}>Aspecto</span>
-                    <span style={styles.optionSubtitle}>Modo claro</span>
-                </div>
-                <span style={styles.badge}>Próximamente</span>
-            </div>
+            // 2. Actualizamos la app en caliente
+            onAvatarUpdate(base64String);
 
-            <div style={{ ...styles.optionItem, borderBottom: 'none' }}>
-                <div style={styles.optionIcon}><GlobeIcon /></div>
-                <div style={styles.optionContent}>
-                    <span style={styles.optionTitle}>Idioma</span>
-                    <span style={styles.optionSubtitle}>Español</span>
-                </div>
-                <span style={styles.badge}>Próximamente</span>
-            </div>
+            setTimeout(() => {
+                alert("✅ Foto de perfil actualizada (Persistente).");
+                setIsUploading(false);
+                setSelectedFile(null);
+                setPreviewUrl(null);
+                onClose();
+            }, 500);
+        };
 
+        reader.readAsDataURL(selectedFile);
+    };
+
+    // Preferimos la preview, si no, la del usuario
+    const currentAvatarToDisplay = previewUrl || user.avatarUrl;
+
+    return (
+        <div style={styles.modalOverlay}>
+            <div style={styles.modalContent}>
+                <input 
+                    type="file" 
+                    ref={fileInputRef} 
+                    style={{ display: 'none' }} 
+                    accept="image/png, image/jpeg, image/jpg"
+                    onChange={handleFileChange}
+                />
+                <div style={styles.modalHeader}>
+                    <h2 style={styles.modalTitle}>Mi Perfil</h2>
+                    <button style={styles.closeButton} onClick={onClose}><CloseIcon /></button>
+                </div>
+                <div style={styles.modalBody}>
+                    <div style={styles.avatarSection}>
+                        <div style={styles.avatarWrapper} onClick={handleImageClick}>
+                            <img src={currentAvatarToDisplay} alt="Profile" style={styles.avatarImage} />
+                            <div style={styles.avatarOverlay}>
+                                <CameraIcon />
+                                <span style={{fontSize: '12px', color: 'white', marginTop: '4px'}}>Cambiar</span>
+                            </div>
+                        </div>
+                        {previewUrl && !isUploading && (
+                            <p style={{color: '#FF9F43', fontSize: '14px', marginTop: '10px'}}>¡Foto lista para guardar!</p>
+                        )}
+                    </div>
+                    <div style={styles.detailsSection}>
+                        <div style={styles.detailItem}>
+                            <div style={styles.iconWrapper}><UserIcon /></div>
+                            <div>
+                                <p style={styles.detailLabel}>Nombre Completo</p>
+                                <p style={styles.detailValue}>{user.name}</p>
+                            </div>
+                        </div>
+                        <div style={styles.detailItem}>
+                             <div style={styles.iconWrapper}><BadgeIcon /></div>
+                             <div>
+                                <p style={styles.detailLabel}>Rol</p>
+                                <p style={styles.detailValue}>{user.role}</p>
+                            </div>
+                        </div>
+                        <div style={styles.detailItem}>
+                            <div style={styles.iconWrapper}><MailIcon /></div>
+                            <div>
+                                <p style={styles.detailLabel}>Correo Electrónico</p>
+                                <p style={styles.detailValue}>{user.email}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {previewUrl && (
+                    <div style={styles.modalFooter}>
+                        <button 
+                            style={styles.saveButton} 
+                            onClick={handleSaveAvatar}
+                            disabled={isUploading}
+                        >
+                            {isUploading ? 'Guardando...' : 'Guardar Nueva Foto'}
+                        </button>
+                    </div>
+                )}
+            </div>
         </div>
-      </div>
-    </>
-  );
+    );
 };
 
-// Estilos del Modal (Mismos que la imagen que enviaste)
-const styles: { [key: string]: React.CSSProperties | any } = {
-  overlay: {
-    position: 'fixed',
-    top: 0,
-    left: 0,
-    width: '100vw',
-    height: '100vh',
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    zIndex: 998,
-  },
-  modal: {
-    position: 'fixed',
-    top: '50%',
-    left: '50%',
-    transform: 'translate(-50%, -50%)',
-    backgroundColor: '#fff',
-    borderRadius: '24px',
-    width: '400px',
-    maxWidth: '90%',
-    zIndex: 999,
-    overflow: 'hidden',
-    boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
-  },
-  header: {
-    backgroundColor: '#FF9F43', // Color naranja principal
-    padding: '30px 20px',
-    display: 'flex',
-    alignItems: 'center',
-    color: '#fff',
-  },
-  avatarContainer: {
-    position: 'relative',
-    marginRight: '20px',
-  },
-  avatarImage: {
-    width: '70px',
-    height: '70px',
-    borderRadius: '50%',
-    border: '3px solid rgba(255,255,255,0.5)',
-    objectFit: 'cover'
-  },
-  cameraButton: {
-    position: 'absolute',
-    bottom: '0',
-    right: '0',
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    border: 'none',
-    borderRadius: '50%',
-    width: '24px',
-    height: '24px',
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    cursor: 'pointer',
-  },
-  userInfo: {
-      display: 'flex',
-      flexDirection: 'column',
-  },
-  userName: {
-      margin: 0,
-      fontSize: '20px',
-      fontWeight: '700',
-  },
-  userRole: {
-      margin: '2px 0',
-      fontSize: '14px',
-      opacity: 0.9,
-  },
-  userEmail: {
-      margin: 0,
-      fontSize: '12px',
-      opacity: 0.8,
-  },
-  optionsList: {
-      padding: '10px 0',
-  },
-  optionItem: {
-      display: 'flex',
-      alignItems: 'center',
-      padding: '16px 24px',
-      cursor: 'pointer',
-      borderBottom: '1px solid #f0f0f0',
-      transition: 'background 0.2s',
-  },
-  optionIcon: {
-      marginRight: '16px',
-      display: 'flex',
-  },
-  optionContent: {
-      flex: 1,
-      display: 'flex',
-      flexDirection: 'column',
-  },
-  optionTitle: {
-      fontSize: '16px',
-      fontWeight: '600',
-      color: '#333',
-  },
-  optionSubtitle: {
-      fontSize: '12px',
-      color: '#999',
-  },
-  badge: {
-      backgroundColor: '#FFF0DE',
-      color: '#FF9F43',
-      fontSize: '10px',
-      padding: '4px 8px',
-      borderRadius: '10px',
-      fontWeight: '700',
-  }
+const styles: { [key: string]: React.CSSProperties } = {
+    modalOverlay: { position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1100 },
+    modalContent: { backgroundColor: '#fff', borderRadius: '20px', padding: '30px', width: '450px', maxWidth: '90%', boxShadow: '0 15px 40px rgba(0,0,0,0.15)', animation: 'fadeIn 0.3s ease' },
+    modalHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' },
+    modalTitle: { margin: 0, fontSize: '24px', fontWeight: '700', color: '#333' },
+    closeButton: { background: 'none', border: 'none', cursor: 'pointer', padding: '5px' },
+    modalBody: { display: 'flex', flexDirection: 'column', alignItems: 'center' },
+    avatarSection: { marginBottom: '30px', textAlign: 'center' },
+    avatarWrapper: { position: 'relative', width: '120px', height: '120px', borderRadius: '50%', cursor: 'pointer', overflow: 'hidden', boxShadow: '0 5px 15px rgba(0,0,0,0.1)', border: '4px solid #fff' },
+    avatarImage: { width: '100%', height: '100%', objectFit: 'cover' },
+    avatarOverlay: { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', transition: 'opacity 0.3s ease' },
+    detailsSection: { width: '100%', display: 'flex', flexDirection: 'column', gap: '20px' },
+    detailItem: { display: 'flex', alignItems: 'center', backgroundColor: '#F8F9FA', padding: '15px 20px', borderRadius: '12px' },
+    iconWrapper: { width: '40px', height: '40px', borderRadius: '50%', backgroundColor: '#FFF5EB', display: 'flex', justifyContent: 'center', alignItems: 'center', marginRight: '15px' },
+    detailLabel: { margin: '0 0 5px 0', fontSize: '13px', color: '#999', fontWeight: '600', textTransform: 'uppercase' },
+    detailValue: { margin: 0, fontSize: '16px', color: '#333', fontWeight: '600' },
+    modalFooter: { marginTop: '25px', display: 'flex', justifyContent: 'center', width: '100%' },
+    saveButton: { padding: '12px 30px', borderRadius: '12px', border: 'none', backgroundColor: '#FF9F43', color: '#fff', fontSize: '16px', fontWeight: '700', cursor: 'pointer', boxShadow: '0 4px 15px rgba(255, 159, 67, 0.3)', transition: 'background-color 0.2s', width: '100%' }
 };

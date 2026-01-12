@@ -1,8 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { NewOrderModal } from './NewOrderModal';
 import { PaymentModal } from './PaymentModal'; 
-import { OrderDetailModal } from './OrderDetailModal'; // <--- Importamos el nuevo modal
-// Importamos los datos y funciones desde el Contexto Global
+import { OrderDetailModal } from './OrderDetailModal';
 import { useOrders, type OrderData } from '../context/OrdersContext';
 
 // --- Iconos ---
@@ -18,18 +17,17 @@ export const TakeoutView: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isNewOrderModalOpen, setIsNewOrderModalOpen] = useState(false);
 
-  // --- USO DEL CONTEXTO (GLOBAL) ---
+  // Contexto Global
   const { orders, addOrder, markOrderAsPaid } = useOrders();
 
-  // --- ESTADOS PARA MODALES ---
-  const [paymentOrder, setPaymentOrder] = useState<OrderData | null>(null); // Orden a pagar
-  const [detailOrder, setDetailOrder] = useState<any>(null); // Orden a ver detalle
+  // Estados para Modales
+  const [paymentOrder, setPaymentOrder] = useState<OrderData | null>(null);
+  const [detailOrder, setDetailOrder] = useState<any>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
 
-  // --- LÓGICA DE FILTRADO ---
+  // Filtros
   const filteredOrders = useMemo(() => {
     return orders.filter(order => {
-      // 1. Filtro por Tabs (Estado)
       if (activeTab !== 'Todos') {
         const statusMap: {[key: string]: string} = {
             'Pendientes': 'Pendiente',
@@ -38,8 +36,6 @@ export const TakeoutView: React.FC = () => {
         };
         if (order.status !== statusMap[activeTab]) return false;
       }
-
-      // 2. Filtro por Buscador
       if (searchTerm) {
         const lowerSearch = searchTerm.toLowerCase();
         return (
@@ -52,30 +48,22 @@ export const TakeoutView: React.FC = () => {
     });
   }, [orders, activeTab, searchTerm]);
 
-
-  // --- MANEJADORES DE EVENTOS ---
-
   const handleNewOrderCreated = (newOrder: OrderData) => {
     addOrder(newOrder); 
     setIsNewOrderModalOpen(false);
   };
 
-  // Lógica Inteligente de Clic en Tarjeta
   const handleCardClick = (order: OrderData) => {
     if (!order.isPaid) {
-      // Si NO está pagada -> Abrir Modal de Pago
       setPaymentOrder(order);
     } else {
-      // Si YA está pagada -> Abrir Modal de Detalle
       setDetailOrder(order);
       setIsDetailOpen(true);
     }
   };
 
-  const handlePaymentSuccess = (method: string) => { // Acepta el string
+  const handlePaymentSuccess = (method: string) => { 
     if (!paymentOrder) return;
-    // Aquí podrías guardar 'method' en el contexto si quisieras, 
-    // por ahora solo marcamos como pagado.
     markOrderAsPaid(paymentOrder.id); 
     setPaymentOrder(null);
   };
@@ -90,23 +78,29 @@ export const TakeoutView: React.FC = () => {
         onOrderCreated={handleNewOrderCreated} 
       />
 
-      {/* 2. Modal de Pago (Solo si hay orden seleccionada para pago) */}
+      {/* 2. Modal de Pago CONFIGURADO PARA LLEVAR */}
       {paymentOrder && (
         <PaymentModal
           isOpen={!!paymentOrder}
           onClose={() => setPaymentOrder(null)}
           onBack={() => setPaymentOrder(null)}
-          // ACEPTAMOS EL ARGUMENTO AUNQUE NO LO USEMOS EN ESTE CASO ESPECÍFICO
           onConfirm={(method) => handlePaymentSuccess(method)} 
+          
+          // DATOS GENERALES
           total={paymentOrder.total}
-          customerName={paymentOrder.customerName}
-          customerPhone={paymentOrder.customerPhone}
-          items={paymentOrder.items || []}
           orderId={Number(paymentOrder.id)}
+          
+          // DATOS ESPECÍFICOS PARA LLEVAR
+          clientLabelText="CLIENTE" // Texto correcto
+          customerName={paymentOrder.customerName || "Cliente Mostrador"}          
+          items={paymentOrder.items || []} // Lista de productos
+          
+          // LA BANDERA MAESTRA (ACTIVA MODO FLEXIBLE)
+          isTakeout={true} 
         />
       )}
 
-      {/* 3. Modal de Detalle (Solo si hay orden seleccionada para ver) */}
+      {/* 3. Modal de Detalle */}
       <OrderDetailModal 
         isOpen={isDetailOpen} 
         onClose={() => setIsDetailOpen(false)} 
@@ -159,10 +153,9 @@ export const TakeoutView: React.FC = () => {
                  key={order.id} 
                  style={{
                    ...styles.orderCard,
-                   // Feedback visual: opacidad ligera si ya pagó
                    opacity: order.isPaid ? 0.85 : 1
                  }}
-                 onClick={() => handleCardClick(order)} // <--- CLIC AQUÍ
+                 onClick={() => handleCardClick(order)}
                >
                   <div style={styles.cardHeader}>
                       <span style={styles.orderId}>Pedido #{order.id}</span>
@@ -176,7 +169,7 @@ export const TakeoutView: React.FC = () => {
                   </div>
 
                   <h4 style={styles.customerName}>{order.customerName || "Cliente Mostrador"}</h4>
-                                      
+                                                      
                   <div style={styles.infoRow}>
                       <ClockIconSmall />
                       <span>15 min</span>
@@ -215,164 +208,29 @@ export const TakeoutView: React.FC = () => {
   );
 };
 
-// --- Estilos ---
+// ESTILOS (Mismos que ya tenías)
 const styles: { [key: string]: React.CSSProperties } = {
-  container: {
-    display: 'flex',
-    flexDirection: 'column',
-    height: 'calc(100vh - 140px)', 
-    position: 'relative',
-    padding: '0 40px'
-  },
-  topBar: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: '30px',
-    marginBottom: '35px', 
-    width: '100%',
-    flexWrap: 'wrap'
-  },
-  searchContainer: {
-    flex: 1, 
-    position: 'relative',
-    display: 'flex', 
-    alignItems: 'center',
-    maxWidth: '600px', 
-  },
-  searchIconWrapper: {
-    position: 'absolute',
-    left: '20px',
-    display: 'flex',
-    pointerEvents: 'none'
-  },
-  searchInput: {
-    width: '100%', 
-    height: '65px', 
-    padding: '0 20px 0 50px', 
-    borderRadius: '12px', 
-    border: '1px solid #eee', 
-    backgroundColor: '#FFFFFF', 
-    fontSize: '16px', 
-    color: '#333333', 
-    boxShadow: '0 2px 10px rgba(0,0,0,0.02)', 
-    outline: 'none', 
-    boxSizing: 'border-box'
-  },
-  tabsContainer: {
-    display: 'flex',
-    gap: '10px',
-    flexWrap: 'wrap'
-  },
-  tab: {
-    padding: '10px 20px',
-    borderRadius: '25px', 
-    fontSize: '14px',
-    fontWeight: '600',
-    cursor: 'pointer',
-    whiteSpace: 'nowrap',
-    boxShadow: '0 2px 5px rgba(0,0,0,0.02)',
-    transition: 'all 0.2s',
-  },
-  contentArea: {
-    flex: 1,
-    overflowY: 'auto', 
-    paddingBottom: '100px'
-  },
-  emptyState: {
-    textAlign: 'center',
-    marginTop: '100px',
-    display: 'flex',
-    justifyContent: 'center'
-  },
-  emptyText: {
-    fontSize: '18px',
-    color: '#999999', 
-    fontWeight: '600',
-  },
-  fab: {
-    position: 'fixed', 
-    bottom: '40px',
-    right: '60px',
-    backgroundColor: '#FF9F43', 
-    color: 'white',
-    border: 'none',
-    borderRadius: '12px',
-    padding: '15px 30px',
-    fontSize: '16px',
-    fontWeight: '600',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '10px',
-    boxShadow: '0 4px 15px rgba(255, 159, 67, 0.4)', 
-    cursor: 'pointer',
-    zIndex: 100
-  },
-  fabText: {
-    marginTop: '1px', 
-  },
-  ordersGrid: {
-      display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-      gap: '20px',
-      alignItems: 'start'
-  },
-  orderCard: {
-      backgroundColor: '#fff',
-      borderRadius: '16px',
-      padding: '20px',
-      boxShadow: '0 4px 20px rgba(0,0,0,0.03)',
-      border: '1px solid #f0f0f0',
-      transition: 'transform 0.2s',
-      cursor: 'pointer' 
-  },
-  cardHeader: {
-      display: 'flex',
-      justifyContent: 'space-between',
-      marginBottom: '15px'
-  },
-  orderId: {
-      fontSize: '13px',
-      color: '#888',
-      fontWeight: '500'
-  },
-  statusBadge: {
-      fontSize: '12px',
-      padding: '4px 10px',
-      borderRadius: '20px',
-      fontWeight: '600'
-  },
-  customerName: {
-      margin: '0 0 15px 0',
-      fontSize: '18px',
-      color: '#1a2a3a',
-      fontWeight: '700'
-  },
-  infoRow: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: '10px',
-      marginBottom: '8px',
-      color: '#666',
-      fontSize: '14px'
-  },
-  cardDivider: {
-      height: '1px',
-      backgroundColor: '#eee',
-      margin: '15px 0'
-  },
-  cardFooter: {
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center'
-  },
-  totalPrice: {
-      fontSize: '20px',
-      fontWeight: '800',
-      color: '#1a2a3a'
-  },
-  paymentStatus: {
-      display: 'flex',
-      alignItems: 'center'
-  }
+  container: { display: 'flex', flexDirection: 'column', height: 'calc(100vh - 140px)', position: 'relative', padding: '0 40px' },
+  topBar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '30px', marginBottom: '35px', width: '100%', flexWrap: 'wrap' },
+  searchContainer: { flex: 1, position: 'relative', display: 'flex', alignItems: 'center', maxWidth: '600px' },
+  searchIconWrapper: { position: 'absolute', left: '20px', display: 'flex', pointerEvents: 'none' },
+  searchInput: { width: '100%', height: '65px', padding: '0 20px 0 50px', borderRadius: '12px', border: '1px solid #eee', backgroundColor: '#FFFFFF', fontSize: '16px', color: '#333333', boxShadow: '0 2px 10px rgba(0,0,0,0.02)', outline: 'none', boxSizing: 'border-box' },
+  tabsContainer: { display: 'flex', gap: '10px', flexWrap: 'wrap' },
+  tab: { padding: '10px 20px', borderRadius: '25px', fontSize: '14px', fontWeight: '600', cursor: 'pointer', whiteSpace: 'nowrap', boxShadow: '0 2px 5px rgba(0,0,0,0.02)', transition: 'all 0.2s' },
+  contentArea: { flex: 1, overflowY: 'auto', paddingBottom: '100px' },
+  emptyState: { textAlign: 'center', marginTop: '100px', display: 'flex', justifyContent: 'center' },
+  emptyText: { fontSize: '18px', color: '#999999', fontWeight: '600' },
+  fab: { position: 'fixed', bottom: '40px', right: '60px', backgroundColor: '#FF9F43', color: 'white', border: 'none', borderRadius: '12px', padding: '15px 30px', fontSize: '16px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '10px', boxShadow: '0 4px 15px rgba(255, 159, 67, 0.4)', cursor: 'pointer', zIndex: 100 },
+  fabText: { marginTop: '1px' },
+  ordersGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px', alignItems: 'start' },
+  orderCard: { backgroundColor: '#fff', borderRadius: '16px', padding: '20px', boxShadow: '0 4px 20px rgba(0,0,0,0.03)', border: '1px solid #f0f0f0', transition: 'transform 0.2s', cursor: 'pointer' },
+  cardHeader: { display: 'flex', justifyContent: 'space-between', marginBottom: '15px' },
+  orderId: { fontSize: '13px', color: '#888', fontWeight: '500' },
+  statusBadge: { fontSize: '12px', padding: '4px 10px', borderRadius: '20px', fontWeight: '600' },
+  customerName: { margin: '0 0 15px 0', fontSize: '18px', color: '#1a2a3a', fontWeight: '700' },
+  infoRow: { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px', color: '#666', fontSize: '14px' },
+  cardDivider: { height: '1px', backgroundColor: '#eee', margin: '15px 0' },
+  cardFooter: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+  totalPrice: { fontSize: '20px', fontWeight: '800', color: '#1a2a3a' },
+  paymentStatus: { display: 'flex', alignItems: 'center' }
 };

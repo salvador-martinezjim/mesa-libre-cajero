@@ -68,7 +68,8 @@ export const createOrderService = async (
     cartItems: any[], 
     total: number, 
     paymentMethod: 'cash' | 'card',
-    amountReceived?: number
+    amountReceived?: number,
+    orderNote?: string // <--- NUEVO PARÁMETRO (Opcional)
 ) => {
     try {
         const validItems = cartItems.filter(item => item.id && Number(item.id) !== 0);
@@ -77,16 +78,19 @@ export const createOrderService = async (
             throw new Error("El carrito contiene productos inválidos. Recarga la página.");
         }
 
+        // --- AQUÍ ESTÁ LA MAGIA PARA COCINA ---
+        // Asignamos la nota general al campo 'comentario' de cada producto
+        // para asegurar que se vea en la comanda sin cambiar el backend.
         const detalles: OrderDetailDTO[] = validItems.map(item => ({
             productoId: Number(item.id),
             cantidad: Number(item.quantity || 1),
             complementosIds: [],
             exclusionProductoIds: [],
-            comentario: ""
+            // Si hay nota, la ponemos aquí. Si no, va vacío.
+            comentario: orderNote || "" 
         }));
 
         // --- ENUMS NUMÉRICOS ---
-        // 0 = Pendiente, 1 = Pagado
         const ESTADO_PENDIENTE = 0;
         const ESTADO_PAGADO = 1;
 
@@ -100,8 +104,6 @@ export const createOrderService = async (
             },
             pago: {
                 tipoPago: paymentMethod === 'cash' ? "Efectivo" : "Tarjeta",
-                // Siempre enviamos objetos (NO nulls) para evitar crash
-                // Pero usamos NÚMEROS para el estado para que C# entienda
                 tarjeta: {
                     estado: paymentMethod === 'card' ? ESTADO_PAGADO : ESTADO_PENDIENTE
                 },
@@ -111,7 +113,7 @@ export const createOrderService = async (
             }
         };
 
-        console.log("📤 POST Create Order (Numérico):", JSON.stringify(payload, null, 2));
+        console.log("📤 POST Create Order con Nota:", JSON.stringify(payload, null, 2));
 
         const response = await api.post('/orders', payload);
         return response.data;
