@@ -2,12 +2,11 @@ import axios from 'axios';
 
 // 1. Crear la instancia de Axios
 const api = axios.create({
-    // Asegúrate que esta URL sea la correcta de tu backend
+    // Asegúrate de que este puerto sea correcto (3000, 4000, etc.)
     baseURL: 'http://localhost:5173/api', 
 });
 
-// 2. INTERCEPTOR DE SOLICITUD (REQUEST)
-// Este ya lo tenías: Pone el token en cada envío
+// 2. INTERCEPTOR DE SOLICITUD
 api.interceptors.request.use(
     (config) => {
         const token = localStorage.getItem('token');
@@ -16,33 +15,30 @@ api.interceptors.request.use(
         }
         return config;
     },
-    (error) => {
-        return Promise.reject(error);
-    }
+    (error) => Promise.reject(error)
 );
 
-// 3. INTERCEPTOR DE RESPUESTA (RESPONSE) - ¡AQUÍ ESTÁ LA MAGIA! 🎩
-// Este vigila si el servidor nos rechaza
+// 3. INTERCEPTOR DE RESPUESTA MODIFICADO
 api.interceptors.response.use(
-    (response) => {
-        // Si todo sale bien, dejamos pasar la respuesta
-        return response;
-    },
+    (response) => response,
     (error) => {
-        // Si hay error, revisamos si es un 401 (No autorizado / Token vencido)
-        if (error.response && (error.response.status === 401 || error.response.status === 403)) {
-            console.warn('⚠️ Sesión expirada o token inválido. Redirigiendo al login...');
+        // CASO 1: Error 401 -> Token vencido o inválido. (AQUÍ SÍ SACAMOS AL USUARIO)
+        if (error.response && error.response.status === 401) {
+            console.warn('⚠️ Token vencido. Redirigiendo al login...');
             
-            // A) Borramos los datos viejos para limpiar la casa
-            //localStorage.removeItem('token');
-            //localStorage.removeItem('userData');
-            //localStorage.removeItem('userEmail');            
-            //window.location.href = '/'; 
-
-            
+            if (window.location.pathname !== '/login') {
+                localStorage.removeItem('token');
+                localStorage.removeItem('userData');
+                window.location.href = '/'; 
+            }
+        } 
+        // CASO 2: Error 403 -> No tienes permiso para esto, PERO tu sesión sigue viva.
+        else if (error.response && error.response.status === 403) {
+            console.error('⛔ Acceso denegado a este recurso (403). No tienes permisos.');
+            // Opcional: Puedes lanzar una alerta visual aquí si quieres
+            // alert("No tienes permisos para realizar esta acción.");
         }
-        
-        // Si es otro error (ej. 500 o 400), lo dejamos pasar para que lo maneje el componente
+
         return Promise.reject(error);
     }
 );

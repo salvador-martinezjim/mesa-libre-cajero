@@ -1,8 +1,9 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { PaymentModal } from './PaymentModal';
+import { TakeoutPaymentModal } from './TakeoutPaymentModal';
 import { type OrderData } from '../context/OrdersContext';
 
-// Servicios
+// 👇 1. IMPORTAMOS EL SERVICIO REAL
+import { createOrderService } from '../services/ordersService';
 import { getCategoriesService } from '../services/categoriesService';
 import { getProductsAndCategoriesService } from '../services/productsService';
 
@@ -44,8 +45,6 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({ isOpen, onClose, o
   const [activeCategory, setActiveCategory] = useState('Todas');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-
-  // --- NUEVO ESTADO PARA LA NOTA ---
   const [orderNote, setOrderNote] = useState(''); 
 
   useEffect(() => {
@@ -54,7 +53,7 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({ isOpen, onClose, o
       setCart([]);
       setActiveCategory('Todas');
       setShowPaymentModal(false);
-      setOrderNote(''); // Reseteamos la nota al abrir
+      setOrderNote(''); 
       setIsLoading(true);
       
       const fetchData = async () => {
@@ -85,17 +84,14 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({ isOpen, onClose, o
                     category: masterCategoryMap[p.categoryId] || 'Otros', 
                     image: p.imagen || PLACEHOLDER_IMG
                 }));
-                
                 setProducts(mappedProducts);
             }
-
         } catch (error) {
             console.error("❌ Error cargando datos:", error);
         } finally {
             setIsLoading(false);
         }
       };
-
       fetchData();
     }
   }, [isOpen]);
@@ -138,31 +134,51 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({ isOpen, onClose, o
     if (cart.length > 0) setShowPaymentModal(true);
   };
 
-  const createOrderObject = (paid: boolean): OrderData => {
-    return {
-        id: `00${Math.floor(Math.random() * 1000)}`,
-        customerName: customerName,
-        customerPhone: '', 
-        itemCount: cart.reduce((acc, item) => acc + item.quantity, 0),
-        total: total,
-        status: 'Pendiente', 
-        isPaid: paid, 
-        date: new Date(),
-        items: cart
-    };
-  };
+  // 👇 2. FUNCIÓN CORREGIDA PARA ENVIAR EL POST
+  const handlePaymentSuccess = async (methodUsed: string, amountReceived?: number) => { 
+    try {
+        console.log("🔌 Creando orden desde NewOrderModal...");
 
-  const handlePaymentSuccess = (methodUsed: string) => { 
-    console.log("Pago exitoso con:", methodUsed);
-    
-    const newOrder = {
-        ...createOrderObject(true),
-        paymentMethod: methodUsed 
-    };
-    
-    onOrderCreated(newOrder); 
-    setShowPaymentModal(false); 
-    onClose();
+        // Transformamos datos ('Efectivo' -> 'cash')
+        const serviceMethod = methodUsed === 'Efectivo' ? 'cash' : 'card';
+
+        // 3. LLAMADA REAL AL BACKEND
+        const response = await createOrderService(
+            customerName || "Cliente Mostrador", 
+            cart, 
+            total, 
+            serviceMethod, 
+            amountReceived, 
+            orderNote 
+        );
+
+        // Si llega aquí, el backend respondió 200 OK
+        console.log("✅ Orden creada en backend:", response);
+        alert("✅ ¡Orden enviada a cocina correctamente!");
+
+        // Feedback visual local (opcional, ya que el socket debería actualizar la lista)
+        // Pero lo dejamos para que la UX sea rápida
+        const newOrderLocal: OrderData = {
+            id: String(response.id || Math.floor(Math.random() * 1000)),
+            customerName: customerName,
+            customerPhone: '', 
+            itemCount: cart.reduce((acc, item) => acc + item.quantity, 0),
+            total: total,
+            status: 'Pendiente', 
+            isPaid: true, 
+            date: new Date(),
+            items: cart
+        };
+        
+        onOrderCreated(newOrderLocal); 
+        setShowPaymentModal(false); 
+        onClose();
+
+    } catch (error: any) {
+        console.error("❌ Error al crear orden:", error);
+        const msg = error.response?.data?.message || "Error al conectar con el servidor.";
+        alert(`❌ ${msg}`);
+    }
   };
 
   if (!isOpen) return null;
@@ -273,7 +289,6 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({ isOpen, onClose, o
             
             <div style={styles.divider}></div>
 
-            {/* --- SECCIÓN DE NOTAS (NUEVO) --- */}
             <div style={styles.noteSection}>
                 <div style={styles.noteHeader}>
                     <NoteIcon />
@@ -287,7 +302,6 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({ isOpen, onClose, o
                     rows={2}
                 />
             </div>
-            {/* ---------------------------------- */}
 
             <div style={styles.divider}></div>
 
@@ -318,24 +332,21 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({ isOpen, onClose, o
         </div>
       </div>
 
-      {/* AQUÍ PASAMOS LA NOTA AL MODAL DE PAGO 
-          (Pero primero necesitas actualizar PaymentModal para recibir este prop) 
-      */}
-      <PaymentModal 
+      <TakeoutPaymentModal 
         isOpen={showPaymentModal}
         onClose={onClose} 
         onBack={() => setShowPaymentModal(false)}
-        onConfirm={handlePaymentSuccess}
+        // 👇 Conectamos la respuesta del modal con la función de envío
+        onConfirm={(method, amount) => handlePaymentSuccess(method, amount)}
         total={total}
         customerName={customerName}
         items={cart}
-        orderNote={orderNote} 
       />
     </div>
   );
 };
 
-// Estilos
+// ESTILOS
 const styles: { [key: string]: React.CSSProperties } = {
   overlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 2000, backdropFilter: 'blur(2px)' },
   modalContainer: { backgroundColor: '#F8F9FA', width: '90%', maxWidth: '650px', height: '90vh', borderRadius: '16px', display: 'flex', flexDirection: 'column', boxShadow: '0 10px 40px rgba(0,0,0,0.2)', overflow: 'hidden' },
@@ -367,13 +378,10 @@ const styles: { [key: string]: React.CSSProperties } = {
   qtyText: { fontSize: '15px', fontWeight: '700', color: '#000000', minWidth: '24px', textAlign: 'center', margin: '0 2px' },
   deleteBtn: { background: 'none', border: 'none', cursor: 'pointer', padding: '5px' },
   divider: { height: '1px', backgroundColor: '#eee', margin: '15px 0' },
-  
-  // ESTILOS DE LA NOTA
   noteSection: { marginBottom: '15px' },
   noteHeader: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' },
   noteLabel: { fontSize: '13px', fontWeight: '600', color: '#666' },
   noteInput: { width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '14px', outline: 'none', backgroundColor: '#FAFAFA', fontFamily: 'inherit', resize: 'none', boxSizing: 'border-box',color:'black' },
-
   totalRow: { display: 'flex', justifyContent: 'space-between', marginBottom: '10px', fontSize: '14px', color: '#666' },
   totalRowLarge: { display: 'flex', justifyContent: 'space-between', marginBottom: '25px', fontSize: '18px', fontWeight: '800', color: '#1a2a3a' },
   actionsFooter: { display: 'flex', gap: '15px', marginTop: '10px' },

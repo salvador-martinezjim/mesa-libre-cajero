@@ -1,10 +1,12 @@
 import React, { useState, useMemo } from 'react';
 import { NewOrderModal } from './NewOrderModal';
-import { PaymentModal } from './PaymentModal'; 
+import { TakeoutPaymentModal } from './TakeoutPaymentModal'; 
 import { OrderDetailModal } from './OrderDetailModal';
 import { useOrders, type OrderData } from '../context/OrdersContext';
+// 👇 Asegúrate de importar esto
+import { createOrderService } from '../services/ordersService';
 
-// --- Iconos ---
+// --- ICONOS (Sin cambios) ---
 const ClockIconSmall = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>;
 const BagIcon = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line><path d="M16 10a4 4 0 0 1-8 0"></path></svg>;
 const SearchIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>;
@@ -16,182 +18,128 @@ export const TakeoutView: React.FC = () => {
   const [activeTab, setActiveTab] = useState('Todos');
   const [searchTerm, setSearchTerm] = useState('');
   const [isNewOrderModalOpen, setIsNewOrderModalOpen] = useState(false);
-
-  // Contexto Global
+  
   const { orders, addOrder, markOrderAsPaid } = useOrders();
-
-  // Estados para Modales
+  
   const [paymentOrder, setPaymentOrder] = useState<OrderData | null>(null);
   const [detailOrder, setDetailOrder] = useState<any>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
 
-  // Filtros
   const filteredOrders = useMemo(() => {
     return orders.filter(order => {
       if (activeTab !== 'Todos') {
-        const statusMap: {[key: string]: string} = {
-            'Pendientes': 'Pendiente',
-            'Preparando': 'Preparando',
-            'Listos': 'Listo'
-        };
+        const statusMap: {[key: string]: string} = { 'Pendientes': 'Pendiente', 'Preparando': 'Preparando', 'Listos': 'Listo' };
         if (order.status !== statusMap[activeTab]) return false;
       }
       if (searchTerm) {
         const lowerSearch = searchTerm.toLowerCase();
-        return (
-            order.customerName.toLowerCase().includes(lowerSearch) ||
-            order.id.includes(lowerSearch) ||
-            order.customerPhone.includes(lowerSearch)
-        );
+        return (order.customerName.toLowerCase().includes(lowerSearch) || order.id.toString().includes(lowerSearch));
       }
       return true;
     });
   }, [orders, activeTab, searchTerm]);
 
-  const handleNewOrderCreated = (newOrder: OrderData) => {
-    addOrder(newOrder); 
-    setIsNewOrderModalOpen(false);
-  };
-
+  const handleNewOrderCreated = (newOrder: OrderData) => { addOrder(newOrder); setIsNewOrderModalOpen(false); };
+  
   const handleCardClick = (order: OrderData) => {
-    if (!order.isPaid) {
-      setPaymentOrder(order);
-    } else {
-      setDetailOrder(order);
-      setIsDetailOpen(true);
-    }
+    if (!order.isPaid) { setPaymentOrder(order); } else { setDetailOrder(order); setIsDetailOpen(true); }
   };
 
-  const handlePaymentSuccess = (method: string) => { 
+  // 👇 REEMPLAZA TU FUNCIÓN handlePaymentSuccess POR ESTA 👇
+  const handlePaymentSuccess = async (method: string, amountReceived?: number) => { 
     if (!paymentOrder) return;
-    markOrderAsPaid(paymentOrder.id); 
-    setPaymentOrder(null);
+
+    try {
+        console.log(`🔌 Procesando pago para: ${paymentOrder.customerName}`);
+
+        // 1. TRADUCCIÓN: El modal devuelve "Efectivo"/"Tarjeta", pero el servicio pide 'cash'/'card'
+        // Esto es necesario porque tu createOrderService espera esos strings específicos.
+        const serviceMethod = method === 'Efectivo' ? 'cash' : 'card';
+
+        // 2. NOTAS: Si tuvieras notas en el objeto paymentOrder, las sacaríamos aquí.
+        // Por ahora enviamos string vacío si no hay.
+        const note = ""; 
+
+        // 3. LLAMAR AL SERVICIO CON LOS ARGUMENTOS SEPARADOS (Como él los pide)
+        // Firma del servicio: (nombre, items, total, metodo, monto, nota)
+        await createOrderService(
+            paymentOrder.customerName || "Cliente Mostrador", // 1. Customer Name
+            paymentOrder.items || [],                         // 2. Cart Items
+            paymentOrder.total,                               // 3. Total
+            serviceMethod,                                    // 4. Payment Method ('cash' | 'card')
+            amountReceived,                                   // 5. Amount Received (opcional)
+            note                                              // 6. Note (opcional)
+        );
+
+        // 4. ÉXITO
+        alert("✅ ¡Orden enviada a cocina correctamente!");
+        
+        // 5. Limpieza y actualización de estado
+        markOrderAsPaid(paymentOrder.id); 
+        setPaymentOrder(null);
+
+    } catch (error: any) {
+        console.error("Error al crear orden:", error);
+        // Intentamos mostrar el mensaje exacto del backend si existe
+        const msg = error.response?.data?.message || error.message || "Error al conectar con el servidor.";
+        alert(`❌ ${msg}`);
+    }
   };
 
   return (
     <div style={styles.container}>
       
-      {/* 1. Modal Nuevo Pedido */}
-      <NewOrderModal 
-        isOpen={isNewOrderModalOpen} 
-        onClose={() => setIsNewOrderModalOpen(false)} 
-        onOrderCreated={handleNewOrderCreated} 
-      />
+      <NewOrderModal isOpen={isNewOrderModalOpen} onClose={() => setIsNewOrderModalOpen(false)} onOrderCreated={handleNewOrderCreated} />
 
-      {/* 2. Modal de Pago CONFIGURADO PARA LLEVAR */}
+      {/* MODAL DE PAGO */}
       {paymentOrder && (
-        <PaymentModal
+        <TakeoutPaymentModal
           isOpen={!!paymentOrder}
           onClose={() => setPaymentOrder(null)}
           onBack={() => setPaymentOrder(null)}
-          onConfirm={(method) => handlePaymentSuccess(method)} 
           
-          // DATOS GENERALES
+          // 👇 Aquí conectamos la respuesta del modal con nuestra función
+          onConfirm={(method, amount) => handlePaymentSuccess(method, amount)} 
+          
           total={paymentOrder.total}
-          orderId={Number(paymentOrder.id)}
-          
-          // DATOS ESPECÍFICOS PARA LLEVAR
-          clientLabelText="CLIENTE" // Texto correcto
           customerName={paymentOrder.customerName || "Cliente Mostrador"}          
-          items={paymentOrder.items || []} // Lista de productos
-          
-          // LA BANDERA MAESTRA (ACTIVA MODO FLEXIBLE)
-          isTakeout={true} 
+          items={paymentOrder.items || []}
+          orderId={Number(paymentOrder.id)}
         />
       )}
 
-      {/* 3. Modal de Detalle */}
-      <OrderDetailModal 
-        isOpen={isDetailOpen} 
-        onClose={() => setIsDetailOpen(false)} 
-        order={detailOrder} 
-      />
+      <OrderDetailModal isOpen={isDetailOpen} onClose={() => setIsDetailOpen(false)} order={detailOrder} />
       
-      {/* Barra Superior */}
       <div style={styles.topBar}>
         <div style={styles.searchContainer}>
           <div style={styles.searchIconWrapper}><SearchIcon /></div>
-          <input 
-            type="text" 
-            placeholder="Buscar por nombre, teléfono..." 
-            style={styles.searchInput}
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+          <input type="text" placeholder="Buscar por nombre, teléfono..." style={styles.searchInput} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
         </div>
-
         <div style={styles.tabsContainer}>
           {FILTER_TABS.map(tab => (
-            <button
-              key={tab}
-              style={{
-                ...styles.tab,
-                backgroundColor: activeTab === tab ? '#FF9F43' : '#FFFFFF',
-                color: activeTab === tab ? '#FFFFFF' : '#666666',
-                border: activeTab === tab ? 'none' : '1px solid #E0E0E0'
-              }}
-              onClick={() => setActiveTab(tab)}
-            >
-              {tab}
-            </button>
+            <button key={tab} style={{...styles.tab, backgroundColor: activeTab === tab ? '#FF9F43' : '#FFFFFF', color: activeTab === tab ? '#FFFFFF' : '#666666', border: activeTab === tab ? 'none' : '1px solid #E0E0E0'}} onClick={() => setActiveTab(tab)}>{tab}</button>
           ))}
         </div>
       </div>
 
-      {/* Contenido Central */}
       <div style={styles.contentArea}>
         {filteredOrders.length === 0 ? (
-          <div style={styles.emptyState}>
-            <h3 style={styles.emptyText}>
-                {orders.length === 0 ? "Sin pedidos por el momento" : "No hay pedidos con este filtro"}
-            </h3>
-          </div>
+          <div style={styles.emptyState}><h3 style={styles.emptyText}>{orders.length === 0 ? "Sin pedidos por el momento" : "No hay pedidos con este filtro"}</h3></div>
         ) : (
           <div style={styles.ordersGrid}>
             {filteredOrders.map((order) => (
-               <div 
-                 key={order.id} 
-                 style={{
-                   ...styles.orderCard,
-                   opacity: order.isPaid ? 0.85 : 1
-                 }}
-                 onClick={() => handleCardClick(order)}
-               >
+               <div key={order.id} style={{...styles.orderCard, opacity: order.isPaid ? 0.85 : 1}} onClick={() => handleCardClick(order)}>
                   <div style={styles.cardHeader}>
                       <span style={styles.orderId}>Pedido #{order.id}</span>
-                      <span style={{
-                          ...styles.statusBadge, 
-                          backgroundColor: order.status === 'Listo' ? '#E8F5E9' : '#E3F2FD', 
-                          color: order.status === 'Listo' ? '#2E7D32' : '#2196F3'
-                      }}>
-                          {order.status}
-                      </span>
+                      <span style={{...styles.statusBadge, backgroundColor: order.status === 'Listo' ? '#E8F5E9' : '#E3F2FD', color: order.status === 'Listo' ? '#2E7D32' : '#2196F3'}}>{order.status}</span>
                   </div>
-
                   <h4 style={styles.customerName}>{order.customerName || "Cliente Mostrador"}</h4>
-                                                      
-                  <div style={styles.infoRow}>
-                      <ClockIconSmall />
-                      <span>15 min</span>
-                  </div>
-                  <div style={styles.infoRow}>
-                      <BagIcon />
-                      <span>{order.itemCount} productos</span>
-                  </div>
-
+                  <div style={styles.infoRow}><ClockIconSmall /><span>15 min</span></div>
+                  <div style={styles.infoRow}><BagIcon /><span>{order.itemCount || 0} productos</span></div>
                   <div style={styles.cardDivider}></div>
-                  
                   <div style={styles.cardFooter}>
-                      <div style={styles.paymentStatus}>
-                           {order.isPaid ? (
-                               <span style={{color: '#28C76F', fontSize: '12px', fontWeight: '700'}}>• PAGADO</span>
-                           ) : (
-                               <span style={{color: '#FF9F43', fontSize: '12px', fontWeight: '700'}}>• COBRAR</span>
-                           )}
-                      </div>
-                      <div style={styles.totalPrice}>
-                          ${order.total.toFixed(2)}
-                      </div>
+                      <div style={styles.paymentStatus}>{order.isPaid ? (<span style={{color: '#28C76F', fontSize: '12px', fontWeight: '700'}}>• PAGADO</span>) : (<span style={{color: '#FF9F43', fontSize: '12px', fontWeight: '700'}}>• COBRAR</span>)}</div>
+                      <div style={styles.totalPrice}>${order.total.toFixed(2)}</div>
                   </div>
                </div>
             ))}
@@ -203,12 +151,11 @@ export const TakeoutView: React.FC = () => {
         <PlusIcon />
         <span style={styles.fabText}>Nuevo Pedido</span>
       </button>
-
     </div>
   );
 };
 
-// ESTILOS (Mismos que ya tenías)
+// ESTILOS
 const styles: { [key: string]: React.CSSProperties } = {
   container: { display: 'flex', flexDirection: 'column', height: 'calc(100vh - 140px)', position: 'relative', padding: '0 40px' },
   topBar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '30px', marginBottom: '35px', width: '100%', flexWrap: 'wrap' },
