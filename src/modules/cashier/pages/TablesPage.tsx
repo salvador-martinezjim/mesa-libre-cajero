@@ -8,7 +8,7 @@ import { NotificationsModal } from '../components/NotificationsModal';
 import { PaymentModal } from '../components/PaymentModal'; 
 import { useAuth } from '../context/AuthContext'; 
 
-// Servicios (AGREGADO payOrderService AQUÍ 👇)
+// Servicios
 import { getPendingOrdersService, getOrderDetailsListService, payOrderService, type PendingOrder } from '../services/ordersService';
 
 // --- Tipos Existentes ---
@@ -46,7 +46,6 @@ interface SocketPaymentData {
     };
 }
 
-// ESTA ES LA NUEVA INTERFAZ PARA EL EVENTO 
 interface SocketPaymentUpdateData {
     Id: number;           // ID del Pago
     OrdenId: number;      // ID de la Orden
@@ -87,13 +86,11 @@ export const TablesPage: React.FC = () => {
   const [pendingOrders, setPendingOrders] = useState<PendingOrder[]>([]);
   const [selectedOrderToPay, setSelectedOrderToPay] = useState<PendingOrder | null>(null);
 
-  // Estados de interfaz
   const [viewMode, setViewMode] = useState<ViewMode>('tables'); 
   const [activeCategory, setActiveCategory] = useState('Todas');
   const [statusFilter, setStatusFilter] = useState<'all' | 'available' | 'occupied'>('all');
   const [searchTerm, setSearchTerm] = useState('');
 
-  // --- Estado para Paginación ---
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10; 
 
@@ -101,7 +98,6 @@ export const TablesPage: React.FC = () => {
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
 
-  // Estado para el Toast de notificación
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
   const [user, setUser] = useState({
@@ -111,7 +107,6 @@ export const TablesPage: React.FC = () => {
     avatarUrl: 'https://img.freepik.com/vector-premium/perfil-avatar-hombre-icono-redondo_24640-14044.jpg'
   });
 
-  // Referencia para el WebSocket
   const ws = useRef<WebSocket | null>(null);
 
   useEffect(() => {
@@ -148,9 +143,6 @@ export const TablesPage: React.FC = () => {
     }
   };
 
-  // =========================================================
-  // === 🔌 WEBSOCKETS INTEGRATION (REAL-TIME) 🔌 ===
-  // =========================================================
   useEffect(() => {
     if (!ws.current) {
         const token = localStorage.getItem('token');
@@ -171,16 +163,11 @@ export const TablesPage: React.FC = () => {
 
             ws.current.onmessage = (event) => {
                 try {
-                    // 1. Convertimos el mensaje que llega
                     const message = JSON.parse(event.data);
-                    
-                    // A veces llega como 'eventType' o 'EventType', prevenimos ambos casos
                     const type = message.eventType || (message as any).EventType;
 
-                    // --- CASO 1: NUEVO PAGO (EL QUE YA TENÍAS) ---
                     if (type === 'NUEVO_PAGO_PENDIENTE_APROBACION') {
                         console.log('🔔 [SOCKET] Nuevo pago recibido:', message.data);
-                        
                         const socketData = message.data;
                         
                         const newOrderFromSocket: PendingOrder = {
@@ -215,22 +202,15 @@ export const TablesPage: React.FC = () => {
                         setToastMsg(`🔔 ¡Nueva solicitud de pago! Mesa ${socketData.MesasIds[0] || '?'}`);
                         setTimeout(() => setToastMsg(null), 4000);
                     } 
-                    
-                    // --- CASO 2: ACTUALIZACIÓN DE PAGO (LO NUEVO DE PEDRO) ---
                     else if (type === 'ACTUALIZACION_PAGO') {
                         console.log('🔄 [SOCKET] Actualización de estado recibida:', message.data);
-                        
-                        // Usamos la interfaz nueva que pegaste arriba
                         const updateData = message.data as SocketPaymentUpdateData;
 
-                        // Actualizamos la lista de órdenes en pantalla sin recargar
                         setPendingOrders(prevOrders => {
                             return prevOrders.map(order => {
-                                // 1. Buscamos la orden correcta
                                 if (order.id === updateData.OrdenId) {
                                     return {
                                         ...order,
-                                        // 2. Buscamos el pago dentro de esa orden y le cambiamos el estado
                                         pagos: order.pagos.map(pago => 
                                             pago.id === updateData.Id 
                                                 ? { ...pago, estado: updateData.EstadoNuevo } 
@@ -238,11 +218,10 @@ export const TablesPage: React.FC = () => {
                                         )
                                     };
                                 }
-                                return order; // Si no es la orden, la dejamos igual
+                                return order; 
                             });
                         });
 
-                        // Avisamos visualmente que cambió
                         setToastMsg(`✅ Estado actualizado: ${updateData.EstadoNuevo}`);
                         setTimeout(() => setToastMsg(null), 3000);
                     }
@@ -280,12 +259,12 @@ export const TablesPage: React.FC = () => {
       }));
   };
 
-  // --- LÓGICA DE CLIC EN MESA (SIN GET DETALLES) ---
   const handleTableClick = async (tableId: number, statusData: { status: TableStatus, order?: PendingOrder }) => {
     if (statusData.status === 'occupied' && statusData.order) {
         
         console.log("💰 Modo Cajero Rápido: Usando total directo sin pedir detalles.");
 
+        // Obtenemos los detalles si están disponibles, si no, usamos placeholder
         const totalOrden = statusData.order.pagos?.[0]?.total || 0;
 
         const fastOrder: PendingOrder = {
@@ -310,43 +289,36 @@ export const TablesPage: React.FC = () => {
     }
   };
 
-  // --- 🔥 FUNCIÓN DE COBRO DEFINITIVA 🔥 ---
-  // Ahora recibe 'amountReceived' desde el modal
-  const handleConfirmPayment = async (paymentMethod: string, amountReceived?: number) => {
+  // --- 🔥 FUNCIÓN DE COBRO CORREGIDA PARA RECIBIR paymentId 🔥 ---
+  const handleConfirmPayment = async (paymentMethod: string, amountReceived: number, paymentId: number) => {
     
-    // 1. Validaciones de seguridad
     if (!selectedOrderToPay || !selectedOrderToPay.pagos || selectedOrderToPay.pagos.length === 0) {
         alert("Error: Datos de la orden incompletos.");
         return;
     }
 
     try {
-        // 2. Extraemos el paymentId (Dato requerido por Swagger)
-        const paymentId = selectedOrderToPay.pagos[0].id;
+        // Usamos el ID específico que viene del modal (dropdown) o el primero si falla
+        const idToPay = paymentId || selectedOrderToPay.pagos[0].id;
 
-        // 3. Traducimos el método a Inglés (Dato requerido por TypeScript)
-        // El modal manda "Efectivo" o "Tarjeta", pero el servicio pide "cash" o "card"
+        // Traducción de método
         let apiMethod: "cash" | "card" = "cash"; 
         if (paymentMethod === 'Tarjeta') apiMethod = 'card';
         
-        // Validación extra: Si es efectivo, debe haber monto
         if (apiMethod === 'cash' && !amountReceived) {
             alert("Error: Debes ingresar el monto recibido en efectivo.");
             return;
         }
 
-        console.log(`🔌 Enviando pago... Orden: ${selectedOrderToPay.id}, Pago: ${paymentId}, Método: ${apiMethod}, Recibido: ${amountReceived}`);
+        console.log(`🔌 Enviando pago... Orden: ${selectedOrderToPay.id}, Pago: ${idToPay}, Método: ${apiMethod}, Recibido: ${amountReceived}`);
 
-        // 4. LLAMADA AL SERVICIO CON LOS 4 ARGUMENTOS
-        // (orderId, paymentId, method, amountReceived)
         await payOrderService(
             selectedOrderToPay.id, 
-            paymentId, 
+            idToPay, 
             apiMethod, 
-            amountReceived // Ahora sí enviamos el dinero para que no falle el JSON
+            amountReceived 
         );
 
-        // 5. ÉXITO
         alert("✅ ¡Cobro registrado con éxito!");
         
         setSelectedOrderToPay(null);
@@ -354,7 +326,6 @@ export const TablesPage: React.FC = () => {
 
     } catch (error: any) {
         console.error("Error al cobrar:", error);
-        // Mensaje de error más amigable
         const msg = error.response?.data?.message || "Error al procesar el pago.";
         alert(`❌ ${msg}`);
     }
@@ -400,12 +371,21 @@ export const TablesPage: React.FC = () => {
       />
       <NotificationsModal isOpen={isNotificationsOpen} onClose={() => setIsNotificationsOpen(false)} />
 
-      {/* MODAL DE PAGO PARA MESAS - CONFIGURACIÓN ESTRICTA */}
+      {/* MODAL DE PAGO PARA MESAS - CORREGIDO PARA MULTI-CUENTAS */}
       {selectedOrderToPay && (
         (() => {
             const tableId = selectedOrderToPay.mesasIds?.[0];
             const tableObj = FIXED_TABLES.find(t => t.id === tableId);
             const displayName = tableObj ? tableObj.name : (selectedOrderToPay.detallesOrden?.comensal || "Cliente Mesa");
+
+            // 👇 1. FILTRAR Y SANITIZAR PAGOS PENDIENTES (FIX DE TYPESCRIPT) 👇
+            const pendingPayments = selectedOrderToPay.pagos
+                .filter(p => p.estado === 'Pendiente')
+                .map(p => ({
+                    ...p,
+                    // Si el back no trae este dato, ponemos 0 por defecto para que TS no llore
+                    efectivoRecibidoMesero: p.efectivoRecibidoMesero ?? 0
+                }));
 
             return (
                 <PaymentModal
@@ -413,23 +393,17 @@ export const TablesPage: React.FC = () => {
                     onClose={() => setSelectedOrderToPay(null)}
                     onBack={() => setSelectedOrderToPay(null)}
                     
-                    // 👇 AQUÍ CONECTAMOS LA NUEVA FUNCIÓN DE COBRO 👇
+                    // Conectamos la función de cobro corregida
                     onConfirm={handleConfirmPayment}
                     
-                    // DATOS GENERALES
-                    total={selectedOrderToPay.pagos[0]?.total || 0} 
                     orderId={selectedOrderToPay.id}
-                    
-                    // DATOS ESPECÍFICOS DE MESA
                     clientLabelText="UBICACIÓN" 
                     customerName={displayName} 
-                    waiterName={selectedOrderToPay.pagos[0]?.mesero?.nombre} 
-                    receivedByWaiter={selectedOrderToPay.pagos[0]?.efectivoRecibidoMesero}
                     
-                    // EL MÉTODO VIENE FORZADO POR EL MESERO
-                    paymentMethod={selectedOrderToPay.pagos[0]?.tipo || "Efectivo"}
+                    // 👇 PASAMOS LA LISTA YA SANITIZADA
+                    pendingPayments={pendingPayments}
                     
-                    // ⚠️ BANDERA MAESTRA: FALSE (ES MESA) ⚠️
+                    // Estos se ignoran si hay pendingPayments, pero los dejamos por seguridad
                     isTakeout={false}
                 />
             );

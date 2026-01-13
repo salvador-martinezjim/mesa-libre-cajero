@@ -125,7 +125,7 @@ export const createOrderService = async (
 };
 
 // ==============================================================
-// 2. PAGAR ORDEN (PATCH) - MANTENEMOS LO QUE YA FUNCIONA
+// 2. PAGAR ORDEN (PATCH) - CORREGIDO PARA EVITAR ERROR DE DECODIFICACIÓN
 // ==============================================================
 export const payOrderService = async (
     orderId: number, 
@@ -134,7 +134,7 @@ export const payOrderService = async (
     amountReceived?: number
 ) => {
     try {
-        const ESTADO_PAGADO = 1; // Enum Numérico
+        const ESTADO_PAGADO = 1; 
         
         const payload: any = {
             estadoPago: ESTADO_PAGADO,
@@ -142,25 +142,32 @@ export const payOrderService = async (
         };
 
         if (paymentMethod === 'cash') {
+            // 👇 AQUÍ ESTABA EL ERROR. AGREGAMOS Number() PARA BLINDARLO
             payload.efectivo = { 
-                recibido: amountReceived,
+                recibido: Number(amountReceived), 
                 cambio: 0 
             };
-            // En PATCH sí quitamos la tarjeta para que no moleste
         } else {
             payload.tarjeta = { 
-                estado: "Pagado" // Si esto falla, cámbialo a 1 también, pero creo que este sí pasaba string en tu prueba exitosa
+                estado: "Pagado" 
             };
         }
 
-        console.log(`📤 PATCH Pago Mesa:`, JSON.stringify(payload, null, 2));
+        console.log(`📤 PATCH Pago Mesa (ID: ${paymentId}):`, JSON.stringify(payload, null, 2));
 
-        const response = await api.patch(`/orders/${orderId}/payments/${paymentId}`, payload);
+        // Verificamos que los IDs sean números también
+        const cleanOrderId = Number(orderId);
+        const cleanPaymentId = Number(paymentId);
+
+        const response = await api.patch(`/orders/${cleanOrderId}/payments/${cleanPaymentId}`, payload);
         return response.data;
+
     } catch (error: any) {
         console.error("Error pagando la orden:", error);
         if (error.response && error.response.data) {
-             alert("Error del servidor: " + JSON.stringify(error.response.data)); 
+             // Esto te ayuda a ver qué dice el backend si vuelve a fallar
+             console.log("🔥 Detalle error backend:", error.response.data);
+             // alert("Error del servidor: " + JSON.stringify(error.response.data)); 
         }
         throw error;
     }
